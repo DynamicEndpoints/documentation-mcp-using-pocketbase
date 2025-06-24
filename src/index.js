@@ -51,14 +51,31 @@ function applySmitheryConfig(config) {
   }
 }
 
-// Initialize PocketBase
-const pb = new PocketBase(process.env.POCKETBASE_URL || 'http://127.0.0.1:8090');
-const DOCUMENTS_COLLECTION = process.env.DOCUMENTS_COLLECTION || 'documents';
-const DEBUG = process.env.DEBUG === 'true';
-const HTTP_PORT = process.env.PORT || process.env.HTTP_PORT || 3000; // Smithery uses PORT
+// Lazy initialization variables - will be set when first needed
+let pb = null;
+let DOCUMENTS_COLLECTION = null;
+let DEBUG = null;
+let HTTP_PORT = null;
+let configInitialized = false;
 
-// Debug logging
+// Initialize configuration lazily
+function initializeConfig() {
+  if (configInitialized) return;
+  
+  pb = new PocketBase(process.env.POCKETBASE_URL || 'http://127.0.0.1:8090');
+  DOCUMENTS_COLLECTION = process.env.DOCUMENTS_COLLECTION || 'documents';
+  DEBUG = process.env.DEBUG === 'true';
+  HTTP_PORT = process.env.PORT || process.env.HTTP_PORT || 3000; // Smithery uses PORT
+  
+  configInitialized = true;
+  debugLog('🔧 Configuration initialized lazily');
+}
+
+// Debug logging with lazy config initialization
 function debugLog(message, data = null) {
+  if (DEBUG === null) {
+    DEBUG = process.env.DEBUG === 'true';
+  }
   if (DEBUG) {
     console.error(`[DEBUG] ${message}`, data ? JSON.stringify(data, null, 2) : '');
   }
@@ -67,54 +84,65 @@ function debugLog(message, data = null) {
 // Global server instance for dynamic tool management
 let globalServer = null;
 
-// Collection schema for documents
-const DOCUMENTS_COLLECTION_SCHEMA = {
-  name: DOCUMENTS_COLLECTION,
-  type: 'base',
-  schema: [
-    {
-      name: 'title',
-      type: 'text',
-      required: true,
-      options: {
-        max: 255
+// Collection schema for documents (lazy loaded)
+function getDocumentsCollectionSchema() {
+  if (!DOCUMENTS_COLLECTION) {
+    initializeConfig();
+  }
+  
+  return {
+    name: DOCUMENTS_COLLECTION,
+    type: 'base',
+    schema: [
+      {
+        name: 'title',
+        type: 'text',
+        required: true,
+        options: {
+          max: 255
+        }
+      },
+      {
+        name: 'content',
+        type: 'text',
+        required: true,
+        options: {}
+      },
+      {
+        name: 'metadata',
+        type: 'json',
+        required: false,
+        options: {}
+      },
+      {
+        name: 'created',
+        type: 'date',
+        required: false,
+        options: {}
+      },
+      {
+        name: 'updated',
+        type: 'date',
+        required: false,
+        options: {}
       }
-    },
-    {
-      name: 'content',
-      type: 'text',
-      required: true,
-      options: {}
-    },
-    {
-      name: 'metadata',
-      type: 'json',
-      required: false,
-      options: {}
-    },
-    {
-      name: 'created',
-      type: 'date',
-      required: false,
-      options: {}
-    },
-    {
-      name: 'updated',
-      type: 'date',
-      required: false,
-      options: {}
-    }
-  ],
-  indexes: [
-    'CREATE INDEX idx_documents_title ON documents (title)',
-    'CREATE INDEX idx_documents_created ON documents (created)',
-    'CREATE INDEX idx_documents_metadata_url ON documents (json_extract(metadata, "$.url"))'
-  ]
-};
+    ],
+    indexes: [
+      'CREATE INDEX idx_documents_title ON documents (title)',
+      'CREATE INDEX idx_documents_created ON documents (created)',
+      'CREATE INDEX idx_documents_metadata_url ON documents (json_extract(metadata, "$.url"))'
+    ]
+  };
+}
 
-// Authenticate with PocketBase
+// Authenticate with PocketBase (with lazy initialization)
 async function authenticatePocketBase() {
   try {
+    // Initialize config if not already done
+    if (!pb) {
+      initializeConfig();
+    }
+    
     if (!pb.authStore.isValid) {
       await pb.admins.authWithPassword(
         process.env.POCKETBASE_EMAIL || process.env.POCKETBASE_ADMIN_EMAIL,
@@ -145,10 +173,15 @@ async function tryAuthenticatePocketBase() {
   }
 }
 
-// Check if collection exists and create if needed
+// Check if collection exists and create if needed (with lazy initialization)
 async function ensureCollectionExists() {
   try {
     await authenticatePocketBase();
+    
+    // Ensure we have the collection name
+    if (!DOCUMENTS_COLLECTION) {
+      initializeConfig();
+    }
     
     // Try to get the collection
     try {
@@ -160,7 +193,7 @@ async function ensureCollectionExists() {
         // Collection doesn't exist, create it
         debugLog('📝 Creating collection', { name: DOCUMENTS_COLLECTION });
         
-        const newCollection = await pb.collections.create(DOCUMENTS_COLLECTION_SCHEMA);
+        const newCollection = await pb.collections.create(getDocumentsCollectionSchema());
         debugLog('✅ Collection created successfully', { 
           name: DOCUMENTS_COLLECTION, 
           id: newCollection.id 
@@ -177,10 +210,14 @@ async function ensureCollectionExists() {
   }
 }
 
-// Get collection info
+// Get collection info (with lazy initialization)
 async function getCollectionInfo() {
   try {
     await authenticatePocketBase();
+    
+    if (!DOCUMENTS_COLLECTION) {
+      initializeConfig();
+    }
     
     const collection = await pb.collections.getOne(DOCUMENTS_COLLECTION);
     const stats = await pb.collection(DOCUMENTS_COLLECTION).getList(1, 1);
@@ -389,10 +426,15 @@ async function extractFromGitHub(url) {
   }
 }
 
-// Store document in PocketBase
+// Store document in PocketBase (with lazy initialization)
 async function storeDocument(docData) {
   try {
     await authenticatePocketBase();
+    
+    // Ensure configuration is initialized
+    if (!DOCUMENTS_COLLECTION) {
+      initializeConfig();
+    }
     
     // Check if document already exists
     const existingDocs = await pb.collection(DOCUMENTS_COLLECTION).getList(1, 1, {
@@ -428,10 +470,14 @@ async function storeDocument(docData) {
   }
 }
 
-// Get documents from PocketBase
+// Get documents from PocketBase (with lazy initialization)
 async function getDocuments(limit = 50, page = 1) {
   try {
     await authenticatePocketBase();
+    
+    if (!DOCUMENTS_COLLECTION) {
+      initializeConfig();
+    }
     
     const records = await pb.collection(DOCUMENTS_COLLECTION).getList(page, limit, {
       sort: '-created',
@@ -446,10 +492,14 @@ async function getDocuments(limit = 50, page = 1) {
   }
 }
 
-// Search documents in PocketBase
+// Search documents in PocketBase (with lazy initialization)
 async function searchDocuments(query, limit = 50) {
   try {
     await authenticatePocketBase();
+    
+    if (!DOCUMENTS_COLLECTION) {
+      initializeConfig();
+    }
     
     const records = await pb.collection(DOCUMENTS_COLLECTION).getList(1, limit, {
       filter: `title ~ "${query}" || content ~ "${query}"`,
@@ -464,10 +514,14 @@ async function searchDocuments(query, limit = 50) {
   }
 }
 
-// Get single document from PocketBase
+// Get single document from PocketBase (with lazy initialization)
 async function getDocument(id) {
   try {
     await authenticatePocketBase();
+    
+    if (!DOCUMENTS_COLLECTION) {
+      initializeConfig();
+    }
     
     const doc = await pb.collection(DOCUMENTS_COLLECTION).getOne(id);
     
@@ -479,10 +533,14 @@ async function getDocument(id) {
   }
 }
 
-// Delete document from PocketBase
+// Delete document from PocketBase (with lazy initialization)
 async function deleteDocument(id) {
   try {
     await authenticatePocketBase();
+    
+    if (!DOCUMENTS_COLLECTION) {
+      initializeConfig();
+    }
     
     await pb.collection(DOCUMENTS_COLLECTION).delete(id);
     
@@ -855,10 +913,15 @@ function createServer() {
       title: 'Server Statistics',
       description: 'Current server statistics and metrics',
       mimeType: 'application/json'
-    },
-    async (uri) => {
+    },    async (uri) => {
       try {
         await authenticatePocketBase();
+        
+        // Ensure configuration is initialized
+        if (!DOCUMENTS_COLLECTION) {
+          initializeConfig();
+        }
+        
         const totalDocs = await pb.collection(DOCUMENTS_COLLECTION).getList(1, 1);
         
         const stats = {
@@ -872,7 +935,7 @@ function createServer() {
           },
           environment: {
             nodeVersion: process.version,
-            debugMode: DEBUG,
+            debugMode: DEBUG || process.env.DEBUG === 'true',
             readOnlyMode: process.env.READ_ONLY_MODE === 'true'
           }
         };
@@ -911,16 +974,15 @@ function createHttpServer() {
   };
   // Modern Streamable HTTP endpoint (protocol version 2025-03-26)
   app.all('/mcp', async (req, res) => {
-    try {
-      // Handle Smithery configuration via query parameters
+    try {      // Handle Smithery configuration via query parameters
       if (Object.keys(req.query).length > 0) {
         const smitheryConfig = parseSmitheryConfig(req.query);
         applySmitheryConfig(smitheryConfig);
         debugLog('Applied Smithery configuration', smitheryConfig);
         
-        // Reinitialize PocketBase with new config
-        const newPb = new PocketBase(process.env.POCKETBASE_URL || 'http://127.0.0.1:8090');
-        Object.assign(pb, newPb);
+        // Force reinitialize configuration with new settings
+        configInitialized = false;
+        initializeConfig();
       }
       
       const sessionId = req.headers['mcp-session-id'];
@@ -1088,10 +1150,15 @@ async function main() {
     }
 
     const mode = process.env.TRANSPORT_MODE || 'stdio';
-    
-    if (mode === 'http') {
+      if (mode === 'http') {
       // HTTP mode with Streamable HTTP and SSE support
       const app = createHttpServer();
+      
+      // Initialize config for HTTP port
+      if (!HTTP_PORT) {
+        initializeConfig();
+      }
+      
       const port = HTTP_PORT;
       
       app.listen(port, () => {
@@ -1101,8 +1168,8 @@ async function main() {
         console.error(`🏥 Health check: http://localhost:${port}/health`);
         console.error(`ℹ️  Server info: http://localhost:${port}/info`);
         console.error(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-        console.error(`🔧 Debug mode: ${DEBUG ? 'enabled' : 'disabled'}`);
-        console.error(`📚 Collection: ${DOCUMENTS_COLLECTION}`);
+        console.error(`🔧 Debug mode: ${DEBUG || process.env.DEBUG === 'true' ? 'enabled' : 'disabled'}`);
+        console.error(`📚 Collection: ${DOCUMENTS_COLLECTION || process.env.DOCUMENTS_COLLECTION || 'documents'}`);
       });
     } else {
       // STDIO mode (default)
@@ -1111,8 +1178,8 @@ async function main() {
       await server.connect(transport);
       console.error('🚀 Document Extractor MCP Server started (STDIO mode)');
       console.error(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.error(`🔧 Debug mode: ${DEBUG ? 'enabled' : 'disabled'}`);
-      console.error(`📚 Collection: ${DOCUMENTS_COLLECTION}`);
+      console.error(`🔧 Debug mode: ${DEBUG || process.env.DEBUG === 'true' ? 'enabled' : 'disabled'}`);
+      console.error(`📚 Collection: ${DOCUMENTS_COLLECTION || process.env.DOCUMENTS_COLLECTION || 'documents'}`);
     }
   } catch (error) {
     console.error('❌ Failed to start server:', error.message);
