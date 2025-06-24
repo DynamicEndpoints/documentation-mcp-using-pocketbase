@@ -1,0 +1,47 @@
+{
+  "name": "document-extractor-mcp",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "MCP server for extracting documents from Microsoft Learn and GitHub with PocketBase storage",  "main": "src/index.js",
+  "module": "src/index.js",
+  "exports": {
+    ".": {
+      "import": "./src/index.js",
+      "default": "./src/index.js"
+    }
+  },
+  "bin": {
+    "document-extractor-mcp": "./src/index.js"
+  },  "scripts": {
+    "start": "node src/index.js",
+    "start:http": "TRANSPORT_MODE=http node src/index.js",
+    "start:stdio": "TRANSPORT_MODE=stdio node src/index.js",
+    "dev": "node --inspect src/index.js",
+    "dev:http": "TRANSPORT_MODE=http DEBUG=true node --inspect src/index.js",
+    "dev:stdio": "TRANSPORT_MODE=stdio DEBUG=true node --inspect src/index.js",
+    "test": "node test-setup.js",    "test:enhanced": "node test-enhanced.js",
+    "test:comprehensive": "node test-comprehensive.js",    "test:data-ops": "node test-data-operations.js",
+    "test:github": "node test-github-extraction.js",
+    "test:powershell": "node test-powershell-docs.js",
+    "install-deps": "npm install"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "document-extraction",
+    "pocketbase",
+    "microsoft-learn",
+    "github"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "cheerio": "^1.0.0-rc.12",
+    "dotenv": "^16.3.1",
+    "express": "^4.21.2",
+    "node-fetch": "^3.3.2",
+    "pocketbase": "^0.26.1",
+    "zod": "^3.22.4"
+  }
+}

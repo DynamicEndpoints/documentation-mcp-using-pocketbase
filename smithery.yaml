@@ -1,0 +1,49 @@
+# Smithery Deployment Configuration
+runtime: "typescript"
+build:
+  buildCommand: "npm ci"
+  startCommand: "npm start"
+
+startCommand:
+  type: "http"
+  configSchema:
+    type: "object"
+    properties:
+      pocketbaseUrl:
+        type: "string"
+        description: "PocketBase server URL"
+        default: "https://your-pocketbase.com"
+      pocketbaseEmail:
+        type: "string"
+        description: "PocketBase admin email"
+      pocketbasePassword:
+        type: "string"
+        description: "PocketBase admin password"
+        format: "password"
+      defaultCollection:
+        type: "string"
+        description: "Collection name for documents"
+        default: "documents"
+    required: ["pocketbaseUrl", "pocketbaseEmail", "pocketbasePassword"]
+  exampleConfig:
+    pocketbaseUrl: "https://your-pocketbase.com"
+    pocketbaseEmail: "admin@example.com"
+    pocketbasePassword: "your-password"
+    defaultCollection: "documents"
+
+# Server metadata
+description: "MCP server for extracting and managing documents using PocketBase backend"
+author: "DynamicEndpoints"
+version: "1.0.0"
+homepage: "https://github.com/DynamicEndpoints/documentation-mcp-using-pocketbase"
+repository: "https://github.com/DynamicEndpoints/documentation-mcp-using-pocketbase"
+license: "MIT"
+
+# Tags for discoverability
+tags:
+  - "documentation"
+  - "extraction"
+  - "pocketbase"
+  - "mcp"
+  - "documents"
+  - "web-scraping"

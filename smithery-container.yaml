@@ -1,0 +1,65 @@
+# Smithery Container Deployment Configuration
+# Use this file if you want to deploy with Docker instead of TypeScript runtime
+# To use: rename this file to smithery.yaml and comment out the typescript config
+
+runtime: "container"
+build:
+  dockerfile: "Dockerfile"
+  dockerBuildPath: "."
+
+startCommand:
+  type: "http"
+  configSchema:
+    type: "object"
+    properties:
+      pocketbaseUrl:
+        type: "string"
+        description: "PocketBase server URL (e.g., https://your-pb-instance.com)"
+        default: "http://127.0.0.1:8090"
+      pocketbaseEmail:
+        type: "string"
+        description: "PocketBase admin email for authentication"
+        format: "email"
+      pocketbasePassword:
+        type: "string"
+        description: "PocketBase admin password"
+        format: "password"
+      defaultCollection:
+        type: "string" 
+        description: "Default collection name for storing documents"
+        default: "documents"
+        pattern: "^[a-zA-Z0-9_]+$"
+      autoCreateCollection:
+        type: "boolean"
+        description: "Automatically create collection if it doesn't exist"
+        default: true
+      debugMode:
+        type: "boolean"
+        description: "Enable debug logging"
+        default: false
+    required: ["pocketbaseUrl", "pocketbaseEmail", "pocketbasePassword"]
+    additionalProperties: false
+  exampleConfig:
+    pocketbaseUrl: "https://your-pocketbase-instance.com"
+    pocketbaseEmail: "admin@yourdomain.com"
+    pocketbasePassword: "your-secure-password"
+    defaultCollection: "documents"
+    autoCreateCollection: true
+    debugMode: false
+
+# Server metadata
+description: "MCP server for extracting and managing documents using PocketBase backend"
+author: "DynamicEndpoints"
+version: "1.0.0"
+homepage: "https://github.com/DynamicEndpoints/documentation-mcp-using-pocketbase"
+repository: "https://github.com/DynamicEndpoints/documentation-mcp-using-pocketbase"
+license: "MIT"
+
+# Tags for discoverability
+tags:
+  - "documentation"
+  - "extraction"
+  - "pocketbase"
+  - "mcp"
+  - "documents"
+  - "web-scraping"
