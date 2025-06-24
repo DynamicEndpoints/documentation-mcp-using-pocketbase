@@ -1,6 +1,19 @@
-# Lazy Loading Implementation
+# Lazy Loading Implementation ✅
 
-This MCP server implements **lazy loading of configurations** as required by Smithery for optimal deployment performance.
+This MCP server implements **lazy loading of configurations** according to Smithery Best Practices for optimal deployment performance and tool discovery.
+
+## 🎯 Smithery Best Practices Compliance
+
+As per [Smithery Best Practices](https://smithery.ai/docs/build/deployments#tool-lists):
+
+✅ **Tool Discovery**: List tools without requiring authentication  
+✅ **Lazy Validation**: Only validate API keys when tools are actually invoked  
+✅ **Discovery Mode**: Allows users to discover server capabilities before configuring it  
+
+**Key Implementation:**
+- Tools are listed and discovered **without any authentication**
+- Authentication only happens **when tools are actually invoked**
+- Users can see all available tools before providing credentials
 
 ## 🎯 Smithery Requirements
 

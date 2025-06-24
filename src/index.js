@@ -197,9 +197,15 @@ function tryAuthenticatePocketBase() {
 // Actual authentication function - only called when really needed
 async function authenticateWhenNeeded() {
   try {
-    // Initialize config if not already done
-    if (!pb) {
+    // Initialize dotenv and config if not already done
+    if (!configInitialized) {
+      initializeDotenv();
       initializeConfig();
+    }
+    
+    // Check if credentials are provided
+    if (!process.env.POCKETBASE_EMAIL && !process.env.POCKETBASE_ADMIN_EMAIL) {
+      throw new Error('PocketBase authentication required. Please configure pocketbaseEmail and pocketbasePassword in your environment variables or Smithery configuration.');
     }
     
     if (!pb.authStore.isValid) {
@@ -613,13 +619,10 @@ function createServer() {
       url: z.string().url('Invalid URL format').describe('Microsoft Learn or GitHub URL to extract content from')
     },    async ({ url }) => {
       try {
-        // Check if credentials are available (for better error messaging)
-        const canAuth = tryAuthenticatePocketBase();
-        if (!canAuth) {
-          throw new Error('PocketBase authentication required. Please configure pocketbaseEmail and pocketbasePassword.');
-        }
+        // LAZY LOADING: Only validate credentials when tool is actually invoked
+        // Do NOT check credentials during tool discovery phase
         
-        // Actually authenticate when tool is invoked
+        // First, try to authenticate when tool is actually used
         await authenticateWhenNeeded();
         
         let docData;
@@ -671,13 +674,10 @@ function createServer() {
       page: z.number().min(1).optional().default(1).describe('Page number for pagination (default: 1)')
     },    async ({ limit = 20, page = 1 }) => {
       try {
-        // Check if credentials are available (for better error messaging)
-        const canAuth = tryAuthenticatePocketBase();
-        if (!canAuth) {
-          throw new Error('PocketBase authentication required. Please configure pocketbaseEmail and pocketbasePassword.');
-        }
+        // LAZY LOADING: Only validate credentials when tool is actually invoked
+        // Do NOT check credentials during tool discovery phase
         
-        // Actually authenticate when tool is invoked
+        // First, try to authenticate when tool is actually used
         await authenticateWhenNeeded();
         
         const result = await getDocuments(limit, page);
@@ -734,13 +734,7 @@ function createServer() {
       limit: z.number().min(1).max(100).optional().default(50).describe('Maximum number of results to return (default: 50)')
     },    async ({ query, limit = 50 }) => {
       try {
-        // Check if credentials are available (for better error messaging)
-        const canAuth = tryAuthenticatePocketBase();
-        if (!canAuth) {
-          throw new Error('PocketBase authentication required. Please configure pocketbaseEmail and pocketbasePassword.');
-        }
-        
-        // Actually authenticate when tool is invoked
+        // LAZY LOADING: Only validate credentials when tool is actually invoked
         await authenticateWhenNeeded();
         
         const result = await searchDocuments(query, limit);
@@ -795,13 +789,7 @@ function createServer() {
       id: z.string().min(1, 'Document ID is required').describe('Document ID to retrieve')
     },    async ({ id }) => {
       try {
-        // Check if credentials are available (for better error messaging)
-        const canAuth = tryAuthenticatePocketBase();
-        if (!canAuth) {
-          throw new Error('PocketBase authentication required. Please configure pocketbaseEmail and pocketbasePassword.');
-        }
-        
-        // Actually authenticate when tool is invoked
+        // LAZY LOADING: Only validate credentials when tool is actually invoked
         await authenticateWhenNeeded();
         
         const doc = await getDocument(id);
@@ -844,13 +832,7 @@ function createServer() {
       id: z.string().min(1, 'Document ID is required').describe('Document ID to delete')
     },    async ({ id }) => {
       try {
-        // Check if credentials are available (for better error messaging)
-        const canAuth = tryAuthenticatePocketBase();
-        if (!canAuth) {
-          throw new Error('PocketBase authentication required. Please configure pocketbaseEmail and pocketbasePassword.');
-        }
-        
-        // Actually authenticate when tool is invoked
+        // LAZY LOADING: Only validate credentials when tool is actually invoked
         await authenticateWhenNeeded();
         
         await deleteDocument(id);
@@ -883,13 +865,7 @@ function createServer() {
     'Check if the documents collection exists and create it if needed',
     {},    async () => {
       try {
-        // Check if credentials are available (for better error messaging)
-        const canAuth = tryAuthenticatePocketBase();
-        if (!canAuth) {
-          throw new Error('PocketBase authentication required. Please configure pocketbaseEmail and pocketbasePassword.');
-        }
-        
-        // Actually authenticate when tool is invoked
+        // LAZY LOADING: Only validate credentials when tool is actually invoked
         await authenticateWhenNeeded();
         
         const result = await ensureCollectionExists();
@@ -936,13 +912,7 @@ function createServer() {
     'Get detailed information about the documents collection including statistics',
     {},    async () => {
       try {
-        // Check if credentials are available (for better error messaging)
-        const canAuth = tryAuthenticatePocketBase();
-        if (!canAuth) {
-          throw new Error('PocketBase authentication required. Please configure pocketbaseEmail and pocketbasePassword.');
-        }
-        
-        // Actually authenticate when tool is invoked
+        // LAZY LOADING: Only validate credentials when tool is actually invoked
         await authenticateWhenNeeded();
         
         const info = await getCollectionInfo();
