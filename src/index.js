@@ -27,7 +27,17 @@ import { z } from 'zod';
 import express from 'express';
 import { randomUUID } from 'node:crypto';
 
-dotenv.config();
+// Lazy initialization flag for dotenv
+let dotenvInitialized = false;
+
+// Initialize dotenv lazily
+function initializeDotenv() {
+  if (!dotenvInitialized) {
+    dotenv.config();
+    dotenvInitialized = true;
+    console.error('🔧 Environment configuration loaded lazily');
+  }
+}
 
 // Parse Smithery configuration from query parameters (dot-notation support)
 function parseSmitheryConfig(query) {
@@ -76,6 +86,9 @@ let configInitialized = false;
 // Initialize configuration lazily
 function initializeConfig() {
   if (configInitialized) return;
+  
+  // Initialize dotenv first
+  initializeDotenv();
   
   pb = new PocketBase(process.env.POCKETBASE_URL || 'http://127.0.0.1:8090');
   DOCUMENTS_COLLECTION = process.env.DOCUMENTS_COLLECTION || 'documents';
@@ -161,6 +174,9 @@ async function authenticatePocketBase() {
 // This function does NOT attempt authentication - it only checks if credentials exist
 function tryAuthenticatePocketBase() {
   try {
+    // Initialize dotenv to ensure environment variables are loaded
+    initializeDotenv();
+    
     // Only check for credentials existence - do not initialize or authenticate
     // Use synchronous check to avoid any async issues during tool registration
     if (!process.env.POCKETBASE_EMAIL && !process.env.POCKETBASE_ADMIN_EMAIL) {

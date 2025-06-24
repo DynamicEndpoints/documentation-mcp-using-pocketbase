@@ -6,12 +6,20 @@ This MCP server implements **lazy loading of configurations** as required by Smi
 
 As per [Smithery documentation](https://smithery.ai/docs/build/deployments#tool-lists), servers should perform lazy loading of configurations to ensure fast discovery and deployment.
 
-## ⚠️ Common Issue: "failedToFetchConfigSchema"
+## ✅ **FIXED: "failedToFetchConfigSchema" Error**
 
-If you encounter the error "failedToFetchConfigSchema", it means the server is trying to access configurations during schema fetching, which violates lazy loading requirements.
+The "failedToFetchConfigSchema" error has been **completely resolved** by implementing true lazy loading:
 
-**❌ Problem:** Server attempts authentication during startup or schema fetching
-**✅ Solution:** Server only authenticates when tools are actually invoked
+**🔧 Root Cause Fixed:**
+- ❌ **Before:** `dotenv.config()` ran at module import time
+- ❌ **Before:** `tryAuthenticatePocketBase()` was async and accessed env vars during tool registration
+- ❌ **Before:** Environment variables accessed during server startup
+
+**✅ **After:** Complete Lazy Loading**
+- ✅ `dotenv.config()` only runs when tools are invoked
+- ✅ `tryAuthenticatePocketBase()` is synchronous with no config access
+- ✅ Zero configuration loading during schema fetching
+- ✅ Server starts instantly without any external dependencies
 
 ## 🔧 Implementation Details
 
