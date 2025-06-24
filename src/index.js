@@ -159,9 +159,10 @@ async function authenticatePocketBase() {
 // Lazy authentication for Smithery discovery
 // Returns true if can authenticate, false if missing credentials (for discovery)
 // This function does NOT attempt authentication - it only checks if credentials exist
-async function tryAuthenticatePocketBase() {
+function tryAuthenticatePocketBase() {
   try {
     // Only check for credentials existence - do not initialize or authenticate
+    // Use synchronous check to avoid any async issues during tool registration
     if (!process.env.POCKETBASE_EMAIL && !process.env.POCKETBASE_ADMIN_EMAIL) {
       debugLog('⚠️ No PocketBase credentials configured (discovery mode)');
       return false;
@@ -597,7 +598,7 @@ function createServer() {
     },    async ({ url }) => {
       try {
         // Check if credentials are available (for better error messaging)
-        const canAuth = await tryAuthenticatePocketBase();
+        const canAuth = tryAuthenticatePocketBase();
         if (!canAuth) {
           throw new Error('PocketBase authentication required. Please configure pocketbaseEmail and pocketbasePassword.');
         }
@@ -655,7 +656,7 @@ function createServer() {
     },    async ({ limit = 20, page = 1 }) => {
       try {
         // Check if credentials are available (for better error messaging)
-        const canAuth = await tryAuthenticatePocketBase();
+        const canAuth = tryAuthenticatePocketBase();
         if (!canAuth) {
           throw new Error('PocketBase authentication required. Please configure pocketbaseEmail and pocketbasePassword.');
         }
@@ -718,7 +719,7 @@ function createServer() {
     },    async ({ query, limit = 50 }) => {
       try {
         // Check if credentials are available (for better error messaging)
-        const canAuth = await tryAuthenticatePocketBase();
+        const canAuth = tryAuthenticatePocketBase();
         if (!canAuth) {
           throw new Error('PocketBase authentication required. Please configure pocketbaseEmail and pocketbasePassword.');
         }
@@ -779,7 +780,7 @@ function createServer() {
     },    async ({ id }) => {
       try {
         // Check if credentials are available (for better error messaging)
-        const canAuth = await tryAuthenticatePocketBase();
+        const canAuth = tryAuthenticatePocketBase();
         if (!canAuth) {
           throw new Error('PocketBase authentication required. Please configure pocketbaseEmail and pocketbasePassword.');
         }
@@ -828,7 +829,7 @@ function createServer() {
     },    async ({ id }) => {
       try {
         // Check if credentials are available (for better error messaging)
-        const canAuth = await tryAuthenticatePocketBase();
+        const canAuth = tryAuthenticatePocketBase();
         if (!canAuth) {
           throw new Error('PocketBase authentication required. Please configure pocketbaseEmail and pocketbasePassword.');
         }
@@ -867,7 +868,7 @@ function createServer() {
     {},    async () => {
       try {
         // Check if credentials are available (for better error messaging)
-        const canAuth = await tryAuthenticatePocketBase();
+        const canAuth = tryAuthenticatePocketBase();
         if (!canAuth) {
           throw new Error('PocketBase authentication required. Please configure pocketbaseEmail and pocketbasePassword.');
         }
@@ -920,7 +921,7 @@ function createServer() {
     {},    async () => {
       try {
         // Check if credentials are available (for better error messaging)
-        const canAuth = await tryAuthenticatePocketBase();
+        const canAuth = tryAuthenticatePocketBase();
         if (!canAuth) {
           throw new Error('PocketBase authentication required. Please configure pocketbaseEmail and pocketbasePassword.');
         }
