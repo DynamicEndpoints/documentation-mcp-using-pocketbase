@@ -151,7 +151,34 @@ function getDocumentsCollectionSchema() {
 }
 
 // Authenticate with PocketBase (with lazy initialization)
+// This is now an alias for authenticateWhenNeeded for backwards compatibility
 async function authenticatePocketBase() {
+  return await authenticateWhenNeeded();
+}
+
+// Lazy authentication for Smithery discovery
+// Returns true if can authenticate, false if missing credentials (for discovery)
+// This function does NOT attempt authentication - it only checks if credentials exist
+async function tryAuthenticatePocketBase() {
+  try {
+    // Only check for credentials existence - do not initialize or authenticate
+    if (!process.env.POCKETBASE_EMAIL && !process.env.POCKETBASE_ADMIN_EMAIL) {
+      debugLog('⚠️ No PocketBase credentials configured (discovery mode)');
+      return false;
+    }
+    
+    // If credentials exist, we assume authentication will work when actually attempted
+    // Do NOT call authenticatePocketBase() here - that would violate lazy loading
+    debugLog('✅ PocketBase credentials found (ready for lazy authentication)');
+    return true;
+  } catch (error) {
+    debugLog('⚠️ Error checking credentials during discovery', error.message);
+    return false;
+  }
+}
+
+// Actual authentication function - only called when really needed
+async function authenticateWhenNeeded() {
   try {
     // Initialize config if not already done
     if (!pb) {
@@ -163,7 +190,7 @@ async function authenticatePocketBase() {
         process.env.POCKETBASE_EMAIL || process.env.POCKETBASE_ADMIN_EMAIL,
         process.env.POCKETBASE_PASSWORD || process.env.POCKETBASE_ADMIN_PASSWORD
       );
-      debugLog('✅ Authenticated with PocketBase');
+      debugLog('✅ Authenticated with PocketBase when needed');
     }
     return true;
   } catch (error) {
@@ -172,26 +199,10 @@ async function authenticatePocketBase() {
   }
 }
 
-// Lazy authentication for Smithery discovery
-// Returns true if can authenticate, false if missing credentials (for discovery)
-async function tryAuthenticatePocketBase() {
-  try {
-    if (!process.env.POCKETBASE_EMAIL && !process.env.POCKETBASE_ADMIN_EMAIL) {
-      debugLog('⚠️ No PocketBase credentials configured (discovery mode)');
-      return false;
-    }
-    await authenticatePocketBase();
-    return true;
-  } catch (error) {
-    debugLog('⚠️ Authentication failed during discovery', error.message);
-    return false;
-  }
-}
-
 // Check if collection exists and create if needed (with lazy initialization)
 async function ensureCollectionExists() {
   try {
-    await authenticatePocketBase();
+    await authenticateWhenNeeded();
     
     // Ensure we have the collection name
     if (!DOCUMENTS_COLLECTION) {
@@ -228,7 +239,7 @@ async function ensureCollectionExists() {
 // Get collection info (with lazy initialization)
 async function getCollectionInfo() {
   try {
-    await authenticatePocketBase();
+    await authenticateWhenNeeded();
     
     if (!DOCUMENTS_COLLECTION) {
       initializeConfig();
@@ -444,7 +455,7 @@ async function extractFromGitHub(url) {
 // Store document in PocketBase (with lazy initialization)
 async function storeDocument(docData) {
   try {
-    await authenticatePocketBase();
+    await authenticateWhenNeeded();
     
     // Ensure configuration is initialized
     if (!DOCUMENTS_COLLECTION) {
@@ -488,7 +499,7 @@ async function storeDocument(docData) {
 // Get documents from PocketBase (with lazy initialization)
 async function getDocuments(limit = 50, page = 1) {
   try {
-    await authenticatePocketBase();
+    await authenticateWhenNeeded();
     
     if (!DOCUMENTS_COLLECTION) {
       initializeConfig();
@@ -510,7 +521,7 @@ async function getDocuments(limit = 50, page = 1) {
 // Search documents in PocketBase (with lazy initialization)
 async function searchDocuments(query, limit = 50) {
   try {
-    await authenticatePocketBase();
+    await authenticateWhenNeeded();
     
     if (!DOCUMENTS_COLLECTION) {
       initializeConfig();
@@ -532,7 +543,7 @@ async function searchDocuments(query, limit = 50) {
 // Get single document from PocketBase (with lazy initialization)
 async function getDocument(id) {
   try {
-    await authenticatePocketBase();
+    await authenticateWhenNeeded();
     
     if (!DOCUMENTS_COLLECTION) {
       initializeConfig();
@@ -551,7 +562,7 @@ async function getDocument(id) {
 // Delete document from PocketBase (with lazy initialization)
 async function deleteDocument(id) {
   try {
-    await authenticatePocketBase();
+    await authenticateWhenNeeded();
     
     if (!DOCUMENTS_COLLECTION) {
       initializeConfig();
@@ -585,11 +596,14 @@ function createServer() {
       url: z.string().url('Invalid URL format').describe('Microsoft Learn or GitHub URL to extract content from')
     },    async ({ url }) => {
       try {
-        // Validate authentication when tool is actually invoked (lazy auth for Smithery)
+        // Check if credentials are available (for better error messaging)
         const canAuth = await tryAuthenticatePocketBase();
         if (!canAuth) {
           throw new Error('PocketBase authentication required. Please configure pocketbaseEmail and pocketbasePassword.');
         }
+        
+        // Actually authenticate when tool is invoked
+        await authenticateWhenNeeded();
         
         let docData;
         
@@ -640,11 +654,14 @@ function createServer() {
       page: z.number().min(1).optional().default(1).describe('Page number for pagination (default: 1)')
     },    async ({ limit = 20, page = 1 }) => {
       try {
-        // Validate authentication when tool is actually invoked (lazy auth for Smithery)
+        // Check if credentials are available (for better error messaging)
         const canAuth = await tryAuthenticatePocketBase();
         if (!canAuth) {
           throw new Error('PocketBase authentication required. Please configure pocketbaseEmail and pocketbasePassword.');
         }
+        
+        // Actually authenticate when tool is invoked
+        await authenticateWhenNeeded();
         
         const result = await getDocuments(limit, page);
         
@@ -698,9 +715,17 @@ function createServer() {
     {
       query: z.string().min(1, 'Query cannot be empty').describe('Search query to find documents (searches title and content)'),
       limit: z.number().min(1).max(100).optional().default(50).describe('Maximum number of results to return (default: 50)')
-    },
-    async ({ query, limit = 50 }) => {
+    },    async ({ query, limit = 50 }) => {
       try {
+        // Check if credentials are available (for better error messaging)
+        const canAuth = await tryAuthenticatePocketBase();
+        if (!canAuth) {
+          throw new Error('PocketBase authentication required. Please configure pocketbaseEmail and pocketbasePassword.');
+        }
+        
+        // Actually authenticate when tool is invoked
+        await authenticateWhenNeeded();
+        
         const result = await searchDocuments(query, limit);
         
         if (result.items.length === 0) {
@@ -751,9 +776,17 @@ function createServer() {
     'Get a specific document by ID with full content',
     {
       id: z.string().min(1, 'Document ID is required').describe('Document ID to retrieve')
-    },
-    async ({ id }) => {
+    },    async ({ id }) => {
       try {
+        // Check if credentials are available (for better error messaging)
+        const canAuth = await tryAuthenticatePocketBase();
+        if (!canAuth) {
+          throw new Error('PocketBase authentication required. Please configure pocketbaseEmail and pocketbasePassword.');
+        }
+        
+        // Actually authenticate when tool is invoked
+        await authenticateWhenNeeded();
+        
         const doc = await getDocument(id);
         
         return {
@@ -792,9 +825,17 @@ function createServer() {
     'Delete a document from PocketBase by ID',
     {
       id: z.string().min(1, 'Document ID is required').describe('Document ID to delete')
-    },
-    async ({ id }) => {
+    },    async ({ id }) => {
       try {
+        // Check if credentials are available (for better error messaging)
+        const canAuth = await tryAuthenticatePocketBase();
+        if (!canAuth) {
+          throw new Error('PocketBase authentication required. Please configure pocketbaseEmail and pocketbasePassword.');
+        }
+        
+        // Actually authenticate when tool is invoked
+        await authenticateWhenNeeded();
+        
         await deleteDocument(id);
         
         return {
@@ -823,9 +864,17 @@ function createServer() {
   const ensureCollectionTool = server.tool(
     'ensure_collection',
     'Check if the documents collection exists and create it if needed',
-    {},
-    async () => {
+    {},    async () => {
       try {
+        // Check if credentials are available (for better error messaging)
+        const canAuth = await tryAuthenticatePocketBase();
+        if (!canAuth) {
+          throw new Error('PocketBase authentication required. Please configure pocketbaseEmail and pocketbasePassword.');
+        }
+        
+        // Actually authenticate when tool is invoked
+        await authenticateWhenNeeded();
+        
         const result = await ensureCollectionExists();
         
         return {
@@ -833,18 +882,18 @@ function createServer() {
             {
               type: 'text',
               text: result.created 
-                ? `✅ Documents collection "${DOCUMENTS_COLLECTION}" created successfully!\n\n` +
+                ? `✅ Documents collection "${DOCUMENTS_COLLECTION || 'documents'}" created successfully!\n\n` +
                   `**Collection Details:**\n` +
                   `- ID: ${result.collection.id}\n` +
                   `- Name: ${result.collection.name}\n` +
                   `- Type: ${result.collection.type}\n` +
                   `- Schema Fields: ${result.collection.schema?.length || 0}\n` +
                   `- Created: ${new Date(result.collection.created).toLocaleString()}`
-                : `✅ Documents collection "${DOCUMENTS_COLLECTION}" already exists.\n\n` +
+                : `✅ Documents collection "${DOCUMENTS_COLLECTION || 'documents'}" already exists.\n\n` +
                   `**Collection Details:**\n` +
                   `- ID: ${result.collection.id}\n` +
                   `- Name: ${result.collection.name}\n` +
-                  `- Type: ${result.collection.type}\n` +
+                  `- Type: ${result.collection.type}\n`+
                   `- Schema Fields: ${result.collection.schema?.length || 0}\n` +
                   `- Created: ${new Date(result.collection.created).toLocaleString()}`
             }
@@ -868,9 +917,17 @@ function createServer() {
   const collectionInfoTool = server.tool(
     'collection_info',
     'Get detailed information about the documents collection including statistics',
-    {},
-    async () => {
+    {},    async () => {
       try {
+        // Check if credentials are available (for better error messaging)
+        const canAuth = await tryAuthenticatePocketBase();
+        if (!canAuth) {
+          throw new Error('PocketBase authentication required. Please configure pocketbaseEmail and pocketbasePassword.');
+        }
+        
+        // Actually authenticate when tool is invoked
+        await authenticateWhenNeeded();
+        
         const info = await getCollectionInfo();
         
         const schemaInfo = info.collection.schema?.map(field => 
@@ -930,7 +987,7 @@ function createServer() {
       mimeType: 'application/json'
     },    async (uri) => {
       try {
-        await authenticatePocketBase();
+        await authenticateWhenNeeded();
         
         // Ensure configuration is initialized
         if (!DOCUMENTS_COLLECTION) {
@@ -1095,11 +1152,10 @@ function createHttpServer() {
       }
     }
   });
-
   // Health check endpoint
   app.get('/health', async (req, res) => {
     try {
-      await authenticatePocketBase();
+      await authenticateWhenNeeded();
       res.json({
         status: 'healthy',
         timestamp: new Date().toISOString(),
@@ -1143,23 +1199,15 @@ function createHttpServer() {
 }
 
 // Start the server
-async function main() {
-  try {
-    // Test PocketBase connection on startup
-    await authenticatePocketBase();
-    console.error('🔗 PocketBase connection established');    // Ensure the documents collection exists (if auto-create is enabled)
+async function main() {  try {
+    // Lazy loading: Do NOT test PocketBase connection on startup
+    // Connection will be established when tools are first invoked
+    console.error('⚡ Lazy loading enabled - PocketBase connection deferred until first tool use');
+    
+    // Ensure the documents collection exists (if auto-create is enabled)
     const autoCreate = process.env.AUTO_CREATE_COLLECTION !== 'false';
     if (autoCreate) {
-      try {
-        const collectionResult = await ensureCollectionExists();
-        if (collectionResult.created) {
-          console.error(`📝 Created documents collection: ${DOCUMENTS_COLLECTION}`);
-        } else {
-          console.error(`✅ Documents collection ready: ${DOCUMENTS_COLLECTION}`);
-        }
-      } catch (error) {
-        console.error(`⚠️  Warning: Could not verify collection: ${error.message}`);
-      }
+      console.error(`📝 Auto-create collection enabled for: ${DOCUMENTS_COLLECTION || process.env.DOCUMENTS_COLLECTION || 'documents'}`);
     } else {
       console.error(`⚠️  Auto-create collection disabled. Use 'ensure_collection' tool if needed.`);
     }

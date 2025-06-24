@@ -6,6 +6,13 @@ This MCP server implements **lazy loading of configurations** as required by Smi
 
 As per [Smithery documentation](https://smithery.ai/docs/build/deployments#tool-lists), servers should perform lazy loading of configurations to ensure fast discovery and deployment.
 
+## ⚠️ Common Issue: "failedToFetchConfigSchema"
+
+If you encounter the error "failedToFetchConfigSchema", it means the server is trying to access configurations during schema fetching, which violates lazy loading requirements.
+
+**❌ Problem:** Server attempts authentication during startup or schema fetching
+**✅ Solution:** Server only authenticates when tools are actually invoked
+
 ## 🔧 Implementation Details
 
 ### Before (Eager Loading)
@@ -43,18 +50,26 @@ function initializeConfig() {
 
 ## 🔄 Lazy Loading Points
 
-### 1. Tool Invocation
-Configurations are loaded when tools are first called:
+### 1. Tool Invocation (FIXED)
+The key fix was ensuring authentication only happens when tools are invoked:
 ```javascript
 async ({ url }) => {
-  // Validate authentication when tool is actually invoked
+  // ✅ Only check if credentials exist (no actual connection)
   const canAuth = await tryAuthenticatePocketBase();
   if (!canAuth) {
     throw new Error('PocketBase authentication required.');
   }
+  
+  // ✅ Actually authenticate only when tool is invoked
+  await authenticateWhenNeeded();
+  
   // ... rest of tool logic
 }
 ```
+
+**Key Functions:**
+- `tryAuthenticatePocketBase()` - Only checks if credentials exist (no connection)
+- `authenticateWhenNeeded()` - Actually connects to PocketBase when needed
 
 ### 2. HTTP Endpoints
 Configurations loaded on first HTTP request:
@@ -71,15 +86,19 @@ app.all('/mcp', async (req, res) => {
 });
 ```
 
-### 3. Resource Access
-Configurations loaded when resources are accessed:
+### 3. Server Startup (CRITICAL FIX)
+The main issue was server trying to authenticate during startup:
 ```javascript
-async (uri) => {
-  await authenticatePocketBase();
-  if (!DOCUMENTS_COLLECTION) {
-    initializeConfig();
-  }
-  // ... access resource
+// ❌ BEFORE (caused failedToFetchConfigSchema)
+async function main() {
+  await authenticatePocketBase(); // ❌ This breaks lazy loading!
+  // ... start server
+}
+
+// ✅ AFTER (proper lazy loading)
+async function main() {
+  console.error('⚡ Lazy loading enabled - PocketBase connection deferred until first tool use');
+  // ... start server without any authentication
 }
 ```
 
