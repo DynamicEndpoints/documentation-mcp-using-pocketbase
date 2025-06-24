@@ -151,6 +151,9 @@ debug-*.js
 test-debug-*.js
 test-experimental-*.js
 
+# Keep important test files (including lazy loading test)
+# test-lazy-loading.js is tracked
+
 # Backup files
 *.bak
 *.backup

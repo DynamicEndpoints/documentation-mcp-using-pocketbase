@@ -1,5 +1,20 @@
 #!/usr/bin/env node
 
+/**
+ * Document Extractor MCP Server with PocketBase Integration
+ * 
+ * This server implements LAZY LOADING of configurations as per Smithery requirements:
+ * https://smithery.ai/docs/build/deployments#tool-lists
+ * 
+ * Key features:
+ * - Configurations are only loaded when tools are first invoked
+ * - PocketBase connection is established lazily
+ * - Environment variables are read on-demand
+ * - Smithery query parameters override configurations dynamically
+ * 
+ * This ensures optimal performance during discovery/deployment phases.
+ */
+
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
