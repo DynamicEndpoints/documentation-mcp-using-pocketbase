@@ -63,7 +63,14 @@ function parseSmitheryConfig(query) {
 // Override environment variables with Smithery config
 function applySmitheryConfig(config) {
   if (config.pocketbaseUrl) {
-    process.env.POCKETBASE_URL = config.pocketbaseUrl;
+    // Ensure URL has proper protocol
+    let url = config.pocketbaseUrl;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = 'https://' + url;
+    }
+    // Remove trailing slash if present
+    url = url.replace(/\/$/, '');
+    process.env.POCKETBASE_URL = url;
   }
   if (config.pocketbaseEmail) {
     process.env.POCKETBASE_EMAIL = config.pocketbaseEmail;
@@ -90,8 +97,18 @@ function initializeConfig() {
   // Initialize dotenv first
   initializeDotenv();
   
-  pb = new PocketBase(process.env.POCKETBASE_URL || 'http://127.0.0.1:8090');
-  DOCUMENTS_COLLECTION = process.env.DOCUMENTS_COLLECTION || 'documents';
+  // Support multiple PocketBase URL environment variable formats
+  const pocketbaseUrl = process.env.POCKETBASE_URL || 
+                        process.env.POCKETBASE_SERVER_URL || 
+                        process.env.PB_URL || 
+                        process.env.PB_SERVER_URL ||
+                        'http://127.0.0.1:8090';
+  
+  pb = new PocketBase(pocketbaseUrl);
+  DOCUMENTS_COLLECTION = process.env.DOCUMENTS_COLLECTION || 
+                         process.env.DOCUMENTS_COLLECTION_NAME ||
+                         process.env.DEFAULT_COLLECTION ||
+                         'documents';
   DEBUG = process.env.DEBUG === 'true';
   HTTP_PORT = process.env.PORT || process.env.HTTP_PORT || 3000; // Smithery uses PORT
   
@@ -190,12 +207,49 @@ async function authenticateWhenNeeded() {
       }
     }
     
-    // Authenticate as superuser (admin)
-    const email = process.env.POCKETBASE_EMAIL || process.env.POCKETBASE_ADMIN_EMAIL;
-    const password = process.env.POCKETBASE_PASSWORD || process.env.POCKETBASE_ADMIN_PASSWORD;
+    // Authenticate as superuser (admin) - support multiple env var formats
+    const email = process.env.POCKETBASE_EMAIL || 
+                  process.env.POCKETBASE_ADMIN_EMAIL || 
+                  process.env.PB_EMAIL || 
+                  process.env.PB_ADMIN_EMAIL ||
+                  process.env.ADMIN_EMAIL;
+    
+    const password = process.env.POCKETBASE_PASSWORD || 
+                     process.env.POCKETBASE_ADMIN_PASSWORD || 
+                     process.env.PB_PASSWORD || 
+                     process.env.PB_ADMIN_PASSWORD ||
+                     process.env.ADMIN_PASSWORD;
     
     if (!email || !password) {
-      throw new Error('PocketBase credentials not configured. Please provide POCKETBASE_EMAIL and POCKETBASE_PASSWORD environment variables.');
+      const supportedEmailVars = [
+        'POCKETBASE_EMAIL',
+        'POCKETBASE_ADMIN_EMAIL', 
+        'PB_EMAIL',
+        'PB_ADMIN_EMAIL',
+        'ADMIN_EMAIL'
+      ];
+      
+      const supportedPasswordVars = [
+        'POCKETBASE_PASSWORD',
+        'POCKETBASE_ADMIN_PASSWORD',
+        'PB_PASSWORD', 
+        'PB_ADMIN_PASSWORD',
+        'ADMIN_PASSWORD'
+      ];
+      
+      throw new Error(
+        `PocketBase credentials not configured. Please provide authentication credentials using any of these environment variables:\n\n` +
+        `📧 **Email:** ${supportedEmailVars.join(', ')}\n` +
+        `🔐 **Password:** ${supportedPasswordVars.join(', ')}\n\n` +
+        `**Alternative options:**\n` +
+        `• Use the 'authenticate' tool to set credentials dynamically\n` +
+        `• Set environment variables in your .env file\n` +
+        `• Configure them in your deployment environment (Smithery, Docker, etc.)\n\n` +
+        `**Example .env file:**\n` +
+        `POCKETBASE_URL=https://your-pocketbase-instance.com\n` +
+        `POCKETBASE_EMAIL=admin@yourdomain.com\n` +
+        `POCKETBASE_PASSWORD=your-secure-password`
+      );
     }
     
     // Use the new authentication method for superusers

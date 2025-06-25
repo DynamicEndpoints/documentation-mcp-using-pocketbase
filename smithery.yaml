@@ -26,9 +26,9 @@ startCommand:
         default: "documents"
     required: ["pocketbaseUrl", "pocketbaseEmail", "pocketbasePassword"]
   exampleConfig:
-    pocketbaseUrl: "https://your-pocketbase.com"
-    pocketbaseEmail: "admin@example.com"
-    pocketbasePassword: "your-password"
+    pocketbaseUrl: "https://sage-worm.pikapod.net"
+    pocketbaseEmail: "randy@playhousehosting.com"
+    pocketbasePassword: "your-secure-password"
     defaultCollection: "documents"
 
 # Server metadata
