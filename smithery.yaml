@@ -1,8 +1,8 @@
 # Smithery Deployment Configuration
-runtime: "typescript"
+runtime: "container"
 build:
-  buildCommand: "npm ci"
-  startCommand: "npm start"
+  dockerfile: "Dockerfile"
+  dockerBuildPath: "."
 
 startCommand:
   type: "http"

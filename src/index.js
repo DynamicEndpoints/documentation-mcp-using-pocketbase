@@ -197,15 +197,9 @@ function tryAuthenticatePocketBase() {
 // Actual authentication function - only called when really needed
 async function authenticateWhenNeeded() {
   try {
-    // Initialize dotenv and config if not already done
-    if (!configInitialized) {
-      initializeDotenv();
+    // Initialize config if not already done
+    if (!pb) {
       initializeConfig();
-    }
-    
-    // Check if credentials are provided
-    if (!process.env.POCKETBASE_EMAIL && !process.env.POCKETBASE_ADMIN_EMAIL) {
-      throw new Error('PocketBase authentication required. Please configure pocketbaseEmail and pocketbasePassword in your environment variables or Smithery configuration.');
     }
     
     if (!pb.authStore.isValid) {
@@ -602,7 +596,7 @@ async function deleteDocument(id) {
 }
 
 // Create the MCP server using the modern SDK
-function createServer() {
+export function createServer() {
   const server = new McpServer({
     name: 'document-extractor-mcp',
     version: '1.0.0',
@@ -619,10 +613,13 @@ function createServer() {
       url: z.string().url('Invalid URL format').describe('Microsoft Learn or GitHub URL to extract content from')
     },    async ({ url }) => {
       try {
-        // LAZY LOADING: Only validate credentials when tool is actually invoked
-        // Do NOT check credentials during tool discovery phase
+        // Check if credentials are available (for better error messaging)
+        const canAuth = tryAuthenticatePocketBase();
+        if (!canAuth) {
+          throw new Error('PocketBase authentication required. Please configure pocketbaseEmail and pocketbasePassword.');
+        }
         
-        // First, try to authenticate when tool is actually used
+        // Actually authenticate when tool is invoked
         await authenticateWhenNeeded();
         
         let docData;
@@ -674,10 +671,13 @@ function createServer() {
       page: z.number().min(1).optional().default(1).describe('Page number for pagination (default: 1)')
     },    async ({ limit = 20, page = 1 }) => {
       try {
-        // LAZY LOADING: Only validate credentials when tool is actually invoked
-        // Do NOT check credentials during tool discovery phase
+        // Check if credentials are available (for better error messaging)
+        const canAuth = tryAuthenticatePocketBase();
+        if (!canAuth) {
+          throw new Error('PocketBase authentication required. Please configure pocketbaseEmail and pocketbasePassword.');
+        }
         
-        // First, try to authenticate when tool is actually used
+        // Actually authenticate when tool is invoked
         await authenticateWhenNeeded();
         
         const result = await getDocuments(limit, page);
@@ -734,7 +734,13 @@ function createServer() {
       limit: z.number().min(1).max(100).optional().default(50).describe('Maximum number of results to return (default: 50)')
     },    async ({ query, limit = 50 }) => {
       try {
-        // LAZY LOADING: Only validate credentials when tool is actually invoked
+        // Check if credentials are available (for better error messaging)
+        const canAuth = tryAuthenticatePocketBase();
+        if (!canAuth) {
+          throw new Error('PocketBase authentication required. Please configure pocketbaseEmail and pocketbasePassword.');
+        }
+        
+        // Actually authenticate when tool is invoked
         await authenticateWhenNeeded();
         
         const result = await searchDocuments(query, limit);
@@ -789,7 +795,13 @@ function createServer() {
       id: z.string().min(1, 'Document ID is required').describe('Document ID to retrieve')
     },    async ({ id }) => {
       try {
-        // LAZY LOADING: Only validate credentials when tool is actually invoked
+        // Check if credentials are available (for better error messaging)
+        const canAuth = tryAuthenticatePocketBase();
+        if (!canAuth) {
+          throw new Error('PocketBase authentication required. Please configure pocketbaseEmail and pocketbasePassword.');
+        }
+        
+        // Actually authenticate when tool is invoked
         await authenticateWhenNeeded();
         
         const doc = await getDocument(id);
@@ -832,7 +844,13 @@ function createServer() {
       id: z.string().min(1, 'Document ID is required').describe('Document ID to delete')
     },    async ({ id }) => {
       try {
-        // LAZY LOADING: Only validate credentials when tool is actually invoked
+        // Check if credentials are available (for better error messaging)
+        const canAuth = tryAuthenticatePocketBase();
+        if (!canAuth) {
+          throw new Error('PocketBase authentication required. Please configure pocketbaseEmail and pocketbasePassword.');
+        }
+        
+        // Actually authenticate when tool is invoked
         await authenticateWhenNeeded();
         
         await deleteDocument(id);
@@ -865,7 +883,13 @@ function createServer() {
     'Check if the documents collection exists and create it if needed',
     {},    async () => {
       try {
-        // LAZY LOADING: Only validate credentials when tool is actually invoked
+        // Check if credentials are available (for better error messaging)
+        const canAuth = tryAuthenticatePocketBase();
+        if (!canAuth) {
+          throw new Error('PocketBase authentication required. Please configure pocketbaseEmail and pocketbasePassword.');
+        }
+        
+        // Actually authenticate when tool is invoked
         await authenticateWhenNeeded();
         
         const result = await ensureCollectionExists();
@@ -912,7 +936,13 @@ function createServer() {
     'Get detailed information about the documents collection including statistics',
     {},    async () => {
       try {
-        // LAZY LOADING: Only validate credentials when tool is actually invoked
+        // Check if credentials are available (for better error messaging)
+        const canAuth = tryAuthenticatePocketBase();
+        if (!canAuth) {
+          throw new Error('PocketBase authentication required. Please configure pocketbaseEmail and pocketbasePassword.');
+        }
+        
+        // Actually authenticate when tool is invoked
         await authenticateWhenNeeded();
         
         const info = await getCollectionInfo();
@@ -1022,7 +1052,7 @@ function createServer() {
 }
 
 // HTTP Server for Streamable HTTP and SSE support
-function createHttpServer() {
+export function createHttpServer() {
   const app = express();
   app.use(express.json());
 
@@ -1033,7 +1063,15 @@ function createHttpServer() {
   };
   // Modern Streamable HTTP endpoint (protocol version 2025-03-26)
   app.all('/mcp', async (req, res) => {
-    try {      // Handle Smithery configuration via query parameters
+    try {
+      debugLog('MCP request received', { 
+        method: req.method, 
+        headers: req.headers, 
+        query: req.query,
+        body: req.body 
+      });
+
+      // Handle Smithery configuration via query parameters
       if (Object.keys(req.query).length > 0) {
         const smitheryConfig = parseSmitheryConfig(req.query);
         applySmitheryConfig(smitheryConfig);
@@ -1044,57 +1082,58 @@ function createHttpServer() {
         initializeConfig();
       }
       
-      const sessionId = req.headers['mcp-session-id'];
+      const sessionId = req.headers['mcp-session-id'] || randomUUID();
       let transport;
 
-      if (sessionId && transports.streamable[sessionId]) {
-        // Reuse existing transport
-        transport = transports.streamable[sessionId];
-      } else if (!sessionId || req.method === 'POST') {
-        // Create new transport for initialization
-        transport = new StreamableHTTPServerTransport({
-          sessionIdGenerator: () => randomUUID(),
-          onsessioninitialized: (sessionId) => {
-            transports.streamable[sessionId] = transport;
-            debugLog('New Streamable HTTP session created', { sessionId });
-          }
-        });
+      // Always create a new transport for each request to ensure proper session handling
+      transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => sessionId,
+        onSessionInitialized: (sid) => {
+          transports.streamable[sid] = transport;
+          debugLog('Streamable HTTP session initialized', { sessionId: sid });
+        }
+      });
 
-        // Clean up transport when closed
-        transport.onclose = () => {
-          if (transport.sessionId) {
-            delete transports.streamable[transport.sessionId];
-            debugLog('Streamable HTTP session closed', { sessionId: transport.sessionId });
-          }
-        };
+      // Store transport in session map
+      transports.streamable[sessionId] = transport;
 
-        // Create and connect server
-        const server = createServer();
-        await server.connect(transport);
-      } else {
-        res.status(400).json({
-          jsonrpc: '2.0',
-          error: {
-            code: -32000,
-            message: 'Bad Request: No valid session ID provided',
-          },
-          id: null,
-        });
-        return;
-      }
+      // Clean up transport when closed
+      transport.onclose = () => {
+        if (sessionId) {
+          delete transports.streamable[sessionId];
+          debugLog('Streamable HTTP session closed', { sessionId });
+        }
+      };
+
+      // Create and connect server
+      const server = createServer();
+      await server.connect(transport);
+      
+      debugLog('Server connected to transport', { sessionId });
 
       // Handle the request
       await transport.handleRequest(req, res, req.body);
+      
     } catch (error) {
       console.error('Error handling Streamable HTTP request:', error);
+      debugLog('Streamable HTTP error details', { 
+        error: error.message, 
+        stack: error.stack,
+        request: {
+          method: req.method,
+          url: req.url,
+          headers: req.headers
+        }
+      });
+      
       if (!res.headersSent) {
         res.status(500).json({
           jsonrpc: '2.0',
           error: {
             code: -32603,
-            message: 'Internal server error',
+            message: 'Internal server error: ' + error.message,
           },
-          id: null,
+          id: req.body?.id || null,
         });
       }
     }
@@ -1103,21 +1142,51 @@ function createHttpServer() {
   // Legacy SSE endpoint for backwards compatibility (protocol version 2024-11-05)
   app.get('/sse', async (req, res) => {
     try {
-      const transport = new SSEServerTransport('/messages', res);
-      transports.sse[transport.sessionId] = transport;
+      debugLog('SSE connection request', { query: req.query });
       
+      // Handle Smithery configuration via query parameters
+      if (Object.keys(req.query).length > 0) {
+        const smitheryConfig = parseSmitheryConfig(req.query);
+        applySmitheryConfig(smitheryConfig);
+        debugLog('Applied Smithery configuration for SSE', smitheryConfig);
+        
+        // Force reinitialize configuration with new settings
+        configInitialized = false;
+        initializeConfig();
+      }
+      
+      const sessionId = randomUUID();
+      const transport = new SSEServerTransport('/messages', res);
+      
+      // Store transport
+      transports.sse[sessionId] = transport;
+      
+      // Clean up on connection close
       res.on('close', () => {
-        delete transports.sse[transport.sessionId];
-        debugLog('SSE session closed', { sessionId: transport.sessionId });
+        delete transports.sse[sessionId];
+        debugLog('SSE session closed', { sessionId });
       });
       
+      res.on('error', (error) => {
+        delete transports.sse[sessionId];
+        debugLog('SSE session error', { sessionId, error: error.message });
+      });
+      
+      // Create and connect server
       const server = createServer();
       await server.connect(transport);
-      debugLog('New SSE session created', { sessionId: transport.sessionId });
+      
+      debugLog('SSE session created and server connected', { sessionId });
+      
     } catch (error) {
       console.error('Error handling SSE request:', error);
+      debugLog('SSE error details', { 
+        error: error.message, 
+        stack: error.stack 
+      });
+      
       if (!res.headersSent) {
-        res.status(500).send('Internal server error');
+        res.status(500).send('Internal server error: ' + error.message);
       }
     }
   });
@@ -1126,36 +1195,100 @@ function createHttpServer() {
   app.post('/messages', async (req, res) => {
     try {
       const sessionId = req.query.sessionId;
+      debugLog('SSE message received', { sessionId, body: req.body });
+      
+      if (!sessionId) {
+        res.status(400).json({
+          jsonrpc: '2.0',
+          error: {
+            code: -32602,
+            message: 'Missing sessionId parameter'
+          },
+          id: req.body?.id || null
+        });
+        return;
+      }
+      
       const transport = transports.sse[sessionId];
       if (transport) {
         await transport.handlePostMessage(req, res, req.body);
+        debugLog('SSE message handled', { sessionId });
       } else {
-        res.status(400).send('No transport found for sessionId');
+        debugLog('SSE transport not found', { sessionId, availableSessions: Object.keys(transports.sse) });
+        res.status(404).json({
+          jsonrpc: '2.0',
+          error: {
+            code: -32001,
+            message: 'Session not found'
+          },
+          id: req.body?.id || null
+        });
       }
     } catch (error) {
       console.error('Error handling SSE message:', error);
+      debugLog('SSE message error', { error: error.message, stack: error.stack });
+      
       if (!res.headersSent) {
-        res.status(500).send('Internal server error');
+        res.status(500).json({
+          jsonrpc: '2.0',
+          error: {
+            code: -32603,
+            message: 'Internal server error: ' + error.message
+          },
+          id: req.body?.id || null
+        });
       }
     }
   });
   // Health check endpoint
   app.get('/health', async (req, res) => {
     try {
-      await authenticateWhenNeeded();
-      res.json({
+      // Don't require authentication for health checks - just test basic connectivity
+      const healthData = {
         status: 'healthy',
         timestamp: new Date().toISOString(),
         server: 'document-extractor-mcp',
         version: '1.0.0',
-        pocketbase: 'connected',
-        uptime: process.uptime()
-      });
+        uptime: process.uptime(),
+        environment: {
+          nodeVersion: process.version,
+          transportMode: process.env.TRANSPORT_MODE || 'stdio',
+          port: process.env.PORT || process.env.HTTP_PORT || 3000,
+          debugMode: DEBUG || process.env.DEBUG === 'true'
+        },
+        configuration: {
+          initialized: configInitialized,
+          pocketbaseUrl: process.env.POCKETBASE_URL ? '✓ configured' : '✗ missing',
+          pocketbaseEmail: process.env.POCKETBASE_EMAIL ? '✓ configured' : '✗ missing',
+          pocketbasePassword: process.env.POCKETBASE_PASSWORD ? '✓ configured' : '✗ missing',
+          collection: DOCUMENTS_COLLECTION || process.env.DOCUMENTS_COLLECTION || 'documents'
+        },
+        sessions: {
+          streamableHttp: Object.keys(transports.streamable).length,
+          sse: Object.keys(transports.sse).length
+        }
+      };
+      
+      // Try to test PocketBase connection if credentials are available
+      if (tryAuthenticatePocketBase()) {
+        try {
+          await authenticateWhenNeeded();
+          healthData.pocketbase = 'connected';
+        } catch (error) {
+          healthData.pocketbase = 'authentication failed: ' + error.message;
+          healthData.status = 'degraded';
+        }
+      } else {
+        healthData.pocketbase = 'not configured (discovery mode)';
+      }
+      
+      res.json(healthData);
     } catch (error) {
       res.status(503).json({
         status: 'unhealthy',
         timestamp: new Date().toISOString(),
-        error: error.message
+        error: error.message,
+        uptime: process.uptime()
       });
     }
   });
