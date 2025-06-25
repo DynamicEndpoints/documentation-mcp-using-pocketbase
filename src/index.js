@@ -621,6 +621,11 @@ export function createServer() {
       url: z.string().url('Invalid URL format').describe('Microsoft Learn or GitHub URL to extract content from')
     },    async ({ url }) => {
       try {
+        // Check read-only mode (lazy loading compliant)
+        if (process.env.READ_ONLY_MODE === 'true') {
+          throw new Error('Server is running in read-only mode. Write operations are disabled.');
+        }
+        
         // Only authenticate when tool is actually invoked - no pre-checks
         await authenticateWhenNeeded();
         
@@ -1073,7 +1078,7 @@ export function createServer() {
     {},
     async () => {
       try {
-        // Initialize config to get current settings
+        // LAZY LOADING: Only initialize config when tool is actually invoked
         initializeConfig();
         
         // Get current environment settings (without revealing password)
@@ -1229,13 +1234,8 @@ export function createServer() {
     }
   );
 
-  // Example of dynamic tool management - disable write tools in read-only mode
-  if (process.env.READ_ONLY_MODE === 'true') {
-    deleteDocumentTool.disable();
-    extractDocumentTool.disable();
-    ensureCollectionTool.disable();
-    console.error('🔒 Running in read-only mode - write operations disabled');
-  }
+  // NOTE: Dynamic tool management moved to lazy initialization
+  // Tools will check READ_ONLY_MODE when actually invoked
 
   // Add a statistics resource that shows server metrics
   server.registerResource(
