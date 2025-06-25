@@ -985,6 +985,11 @@ export function createServer() {
     'Check if the documents collection exists and create it if needed',
     {},    async () => {
       try {
+        // Check read-only mode (lazy loading compliant)
+        if (process.env.READ_ONLY_MODE === 'true') {
+          throw new Error('Server is running in read-only mode. Write operations are disabled.');
+        }
+        
         // Only authenticate when tool is actually invoked
         await authenticateWhenNeeded();
         
@@ -1579,13 +1584,8 @@ async function main() {  try {
     // Connection will be established when tools are first invoked
     console.error('⚡ Lazy loading enabled - PocketBase connection deferred until first tool use');
     
-    // Ensure the documents collection exists (if auto-create is enabled)
-    const autoCreate = process.env.AUTO_CREATE_COLLECTION !== 'false';
-    if (autoCreate) {
-      console.error(`📝 Auto-create collection enabled for: ${DOCUMENTS_COLLECTION || process.env.DOCUMENTS_COLLECTION || 'documents'}`);
-    } else {
-      console.error(`⚠️  Auto-create collection disabled. Use 'ensure_collection' tool if needed.`);
-    }
+    // Note: Collection auto-create and other settings will be checked when tools are first used
+    console.error('📝 Configuration will be loaded when first tool is invoked (lazy loading)');
 
     const mode = process.env.TRANSPORT_MODE || 'stdio';
       if (mode === 'http') {
@@ -1606,8 +1606,7 @@ async function main() {  try {
         console.error(`🏥 Health check: http://localhost:${port}/health`);
         console.error(`ℹ️  Server info: http://localhost:${port}/info`);
         console.error(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-        console.error(`🔧 Debug mode: ${DEBUG || process.env.DEBUG === 'true' ? 'enabled' : 'disabled'}`);
-        console.error(`📚 Collection: ${DOCUMENTS_COLLECTION || process.env.DOCUMENTS_COLLECTION || 'documents'}`);
+        console.error(`🔧 Configuration: Will be loaded on first tool use (lazy loading)`);
       });
     } else {
       // STDIO mode (default)
@@ -1616,8 +1615,7 @@ async function main() {  try {
       await server.connect(transport);
       console.error('🚀 Document Extractor MCP Server started (STDIO mode)');
       console.error(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.error(`🔧 Debug mode: ${DEBUG || process.env.DEBUG === 'true' ? 'enabled' : 'disabled'}`);
-      console.error(`📚 Collection: ${DOCUMENTS_COLLECTION || process.env.DOCUMENTS_COLLECTION || 'documents'}`);
+      console.error(`🔧 Configuration: Will be loaded on first tool use (lazy loading)`);
     }
   } catch (error) {
     console.error('❌ Failed to start server:', error.message);
