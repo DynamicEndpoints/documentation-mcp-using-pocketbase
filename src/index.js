@@ -1014,34 +1014,43 @@ export function createHttpServer() {
         initializeConfig();
       }
       
-      const sessionId = req.headers['mcp-session-id'] || randomUUID();
+      const sessionId = req.headers['mcp-session-id'];
       let transport;
 
-      // Always create a new transport for each request to ensure proper session handling
-      transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => sessionId,
-        onSessionInitialized: (sid) => {
-          transports.streamable[sid] = transport;
-          debugLog('Streamable HTTP session initialized', { sessionId: sid });
+      if (sessionId && transports.streamable[sessionId]) {
+        // Reuse existing transport
+        transport = transports.streamable[sessionId];
+        debugLog('Reusing existing transport', { sessionId });
+      } else {
+        // Create new transport - handle both new sessions and tool discovery
+        const newSessionId = sessionId || randomUUID();
+        
+        try {
+          transport = new StreamableHTTPServerTransport({
+            sessionIdGenerator: () => newSessionId
+          });
+
+          // Store transport in session map
+          transports.streamable[newSessionId] = transport;
+
+          // Clean up transport when closed
+          transport.onclose = () => {
+            if (newSessionId) {
+              delete transports.streamable[newSessionId];
+              debugLog('Streamable HTTP session closed', { sessionId: newSessionId });
+            }
+          };
+
+          // Create and connect server
+          const server = createServer();
+          await server.connect(transport);
+          
+          debugLog('Server connected to transport', { sessionId: newSessionId });
+        } catch (transportError) {
+          console.error('Transport creation error:', transportError);
+          throw new Error(`Failed to create transport: ${transportError.message}`);
         }
-      });
-
-      // Store transport in session map
-      transports.streamable[sessionId] = transport;
-
-      // Clean up transport when closed
-      transport.onclose = () => {
-        if (sessionId) {
-          delete transports.streamable[sessionId];
-          debugLog('Streamable HTTP session closed', { sessionId });
-        }
-      };
-
-      // Create and connect server
-      const server = createServer();
-      await server.connect(transport);
-      
-      debugLog('Server connected to transport', { sessionId });
+      }
 
       // Handle the request
       await transport.handleRequest(req, res, req.body);
@@ -1054,16 +1063,31 @@ export function createHttpServer() {
         request: {
           method: req.method,
           url: req.url,
-          headers: req.headers
+          headers: req.headers,
+          body: req.body
         }
       });
       
       if (!res.headersSent) {
+        // Provide more specific error messages
+        let errorCode = -32603;
+        let errorMessage = 'Internal server error';
+        
+        if (error.message.includes('transport')) {
+          errorCode = -32001;
+          errorMessage = 'Transport initialization failed';
+        } else if (error.message.includes('Server not initialized')) {
+          errorCode = -32000;
+          errorMessage = 'Server initialization error';
+        } else {
+          errorMessage = error.message;
+        }
+        
         res.status(500).json({
           jsonrpc: '2.0',
           error: {
-            code: -32603,
-            message: 'Internal server error: ' + error.message,
+            code: errorCode,
+            message: errorMessage,
           },
           id: req.body?.id || null,
         });
