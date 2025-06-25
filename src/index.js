@@ -947,6 +947,11 @@ export function createServer() {
       id: z.string().min(1, 'Document ID is required').describe('Document ID to delete')
     },    async ({ id }) => {
       try {
+        // Check read-only mode (lazy loading compliant)
+        if (process.env.READ_ONLY_MODE === 'true') {
+          throw new Error('Server is running in read-only mode. Write operations are disabled.');
+        }
+        
         // Only authenticate when tool is actually invoked
         await authenticateWhenNeeded();
         
