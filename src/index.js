@@ -176,17 +176,51 @@ async function authenticateWhenNeeded() {
       initializeConfig();
     }
     
-    if (!pb.authStore.isValid) {
-      await pb.admins.authWithPassword(
-        process.env.POCKETBASE_EMAIL || process.env.POCKETBASE_ADMIN_EMAIL,
-        process.env.POCKETBASE_PASSWORD || process.env.POCKETBASE_ADMIN_PASSWORD
-      );
-      debugLog('✅ Authenticated with PocketBase when needed');
+    // Check if we already have a valid authentication
+    if (pb.authStore.isValid) {
+      try {
+        // Try to refresh the token to ensure it's still valid
+        await pb.collection('_superusers').authRefresh();
+        debugLog('✅ Authentication refreshed successfully');
+        return true;
+      } catch (refreshError) {
+        debugLog('🔄 Auth refresh failed, re-authenticating...', { error: refreshError.message });
+        // Clear invalid auth and proceed to re-authenticate
+        pb.authStore.clear();
+      }
     }
+    
+    // Authenticate as superuser (admin)
+    const email = process.env.POCKETBASE_EMAIL || process.env.POCKETBASE_ADMIN_EMAIL;
+    const password = process.env.POCKETBASE_PASSWORD || process.env.POCKETBASE_ADMIN_PASSWORD;
+    
+    if (!email || !password) {
+      throw new Error('PocketBase credentials not configured. Please provide POCKETBASE_EMAIL and POCKETBASE_PASSWORD environment variables.');
+    }
+    
+    // Use the new authentication method for superusers
+    const authData = await pb.collection('_superusers').authWithPassword(email, password);
+    
+    debugLog('✅ Authenticated with PocketBase as superuser', { 
+      userId: authData.record.id,
+      email: authData.record.email,
+      tokenValid: pb.authStore.isValid
+    });
+    
     return true;
   } catch (error) {
     console.error('❌ PocketBase authentication failed:', error.message);
-    throw new Error(`PocketBase authentication failed: ${error.message}`);
+    
+    // Provide more specific error messages
+    if (error.status === 400) {
+      throw new Error(`Authentication failed: Invalid credentials. Please check your email and password.`);
+    } else if (error.status === 404) {
+      throw new Error(`Authentication failed: Admin user not found. Please ensure the admin account exists.`);
+    } else if (error.message.includes('fetch')) {
+      throw new Error(`Authentication failed: Cannot connect to PocketBase server at ${pb.baseUrl}. Please check the server URL and ensure PocketBase is running.`);
+    } else {
+      throw new Error(`PocketBase authentication failed: ${error.message}`);
+    }
   }
 }
 
@@ -644,11 +678,14 @@ export function createServer() {
         // Create a temporary PocketBase instance for testing
         const testPb = new PocketBase(pocketbaseUrl);
         
-        // Attempt authentication
-        const authData = await testPb.admins.authWithPassword(email, password);
+        // Attempt authentication using the correct superuser collection
+        const authData = await testPb.collection('_superusers').authWithPassword(email, password);
         
         // Test basic functionality by fetching collections
         const collections = await testPb.collections.getList(1, 10);
+        
+        // Get server health to verify connectivity
+        const healthCheck = await testPb.health.check();
         
         // Update the global configuration if authentication succeeds
         process.env.POCKETBASE_URL = pocketbaseUrl;
@@ -668,27 +705,55 @@ export function createServer() {
                     `**PocketBase Server:** ${pocketbaseUrl}\n` +
                     `**Admin Email:** ${email}\n` +
                     `**Admin ID:** ${authData.record.id}\n` +
-                    `**Token Expires:** ${new Date(authData.record.tokenKey).toLocaleString()}\n\n` +
+                    `**Created:** ${new Date(authData.record.created).toLocaleString()}\n` +
+                    `**Token Valid:** ${testPb.authStore.isValid}\n\n` +
                     `**Server Info:**\n` +
+                    `- Server Status: ${healthCheck?.message || 'Healthy'}\n` +
                     `- Collections Available: ${collections.totalItems}\n` +
-                    `- First Few Collections: ${collections.items.slice(0, 3).map(c => c.name).join(', ')}\n\n` +
-                    `🔧 **Configuration Updated** - You can now use other tools that require PocketBase access.`
+                    `- Sample Collections: ${collections.items.slice(0, 3).map(c => c.name).join(', ')}\n\n` +
+                    `🔧 **Configuration Updated** - You can now use other tools that require PocketBase access.\n\n` +
+                    `**Available Tools:**\n` +
+                    `- \`extract_document\`: Extract and store documents\n` +
+                    `- \`list_documents\`: List stored documents\n` +
+                    `- \`search_documents\`: Search document content\n` +
+                    `- \`get_document\`: Get specific document by ID\n` +
+                    `- \`delete_document\`: Delete a document\n` +
+                    `- \`ensure_collection\`: Create documents collection if needed\n` +
+                    `- \`collection_info\`: Get collection statistics\n` +
+                    `- \`connection_status\`: Check current connection status`
             }
           ]
         };
       } catch (error) {
         let errorMessage = error.message;
         let troubleshooting = '';
+        let statusCode = error.status || 0;
         
-        if (error.status === 400) {
+        if (statusCode === 400) {
           errorMessage = 'Invalid credentials - please check your email and password';
-          troubleshooting = '\n\n**Troubleshooting:**\n• Verify email and password are correct\n• Ensure the account has admin privileges';
-        } else if (error.message.includes('fetch')) {
+          troubleshooting = '\n\n**Troubleshooting:**\n' +
+                           '• Verify email and password are correct\n' +
+                           '• Ensure the account has admin/superuser privileges\n' +
+                           '• Check if the admin account exists in PocketBase';
+        } else if (statusCode === 404) {
+          errorMessage = 'Admin user not found - account may not exist';
+          troubleshooting = '\n\n**Troubleshooting:**\n' +
+                           '• Create an admin account in PocketBase\n' +
+                           '• Ensure you\'re using the correct email address\n' +
+                           '• Check PocketBase admin dashboard for existing accounts';
+        } else if (error.message.includes('fetch') || error.message.includes('ECONNREFUSED')) {
           errorMessage = 'Cannot connect to PocketBase server - please check the URL';
-          troubleshooting = '\n\n**Troubleshooting:**\n• Verify the PocketBase URL is correct\n• Ensure the server is running and accessible\n• Check for network connectivity issues';
-        } else if (error.status === 404) {
-          errorMessage = 'PocketBase server not found at the provided URL';
-          troubleshooting = '\n\n**Troubleshooting:**\n• Double-check the server URL\n• Ensure PocketBase is running on the specified port';
+          troubleshooting = '\n\n**Troubleshooting:**\n' +
+                           '• Verify the PocketBase URL is correct\n' +
+                           '• Ensure PocketBase is running and accessible\n' +
+                           '• Check for network connectivity issues\n' +
+                           '• Verify firewall settings allow connections';
+        } else if (statusCode === 401) {
+          errorMessage = 'Unauthorized - authentication rejected by server';
+          troubleshooting = '\n\n**Troubleshooting:**\n' +
+                           '• Check if admin authentication is enabled\n' +
+                           '• Verify account credentials are correct\n' +
+                           '• Ensure PocketBase server is properly configured';
         }
         
         return {
@@ -698,7 +763,13 @@ export function createServer() {
               text: `❌ **Authentication Failed**\n\n` +
                     `**Error:** ${errorMessage}\n` +
                     `**Server:** ${pocketbaseUrl}\n` +
-                    `**Email:** ${email}${troubleshooting}`
+                    `**Email:** ${email}\n` +
+                    `**Status Code:** ${statusCode || 'Unknown'}${troubleshooting}\n\n` +
+                    `**Common Solutions:**\n` +
+                    `• Make sure PocketBase is running and accessible\n` +
+                    `• Verify admin credentials in PocketBase dashboard\n` +
+                    `• Check server URL format (include http:// or https://)\n` +
+                    `• Ensure no trailing slash in the URL`
             }
           ],
           isError: true
@@ -1013,6 +1084,7 @@ export function createServer() {
         let connectionStatus = 'Not tested';
         let serverInfo = {};
         let authInfo = {};
+        let errorDetails = '';
         
         // Test connection if credentials are available
         if (pocketbaseUrl !== 'Not configured' && pocketbaseEmail !== 'Not configured') {
@@ -1023,54 +1095,119 @@ export function createServer() {
             // Get server info
             if (pb && pb.authStore.isValid) {
               authInfo = {
-                email: pb.authStore.model.email,
-                id: pb.authStore.model.id,
-                avatar: pb.authStore.model.avatar || 'None',
-                created: new Date(pb.authStore.model.created).toLocaleString()
+                email: pb.authStore.record?.email || 'Unknown',
+                id: pb.authStore.record?.id || 'Unknown',
+                avatar: pb.authStore.record?.avatar || 'None',
+                created: pb.authStore.record?.created ? new Date(pb.authStore.record.created).toLocaleString() : 'Unknown',
+                tokenValid: pb.authStore.isValid,
+                recordType: 'superuser'
               };
               
               // Try to get some basic server stats
               try {
                 const collections = await pb.collections.getList(1, 5);
+                const healthCheck = await pb.health.check();
+                
                 serverInfo.totalCollections = collections.totalItems;
                 serverInfo.sampleCollections = collections.items.map(c => c.name).slice(0, 3);
+                serverInfo.health = healthCheck?.message || 'Healthy';
+                serverInfo.version = healthCheck?.version || 'Unknown';
               } catch (e) {
-                serverInfo.error = 'Could not fetch server statistics';
+                serverInfo.error = 'Could not fetch server statistics: ' + e.message;
+              }
+              
+              // Check if documents collection exists
+              try {
+                const docsCollection = await pb.collections.getOne(collection);
+                serverInfo.documentsCollection = {
+                  exists: true,
+                  id: docsCollection.id,
+                  created: new Date(docsCollection.created).toLocaleString(),
+                  fieldsCount: docsCollection.schema?.length || 0
+                };
+              } catch (e) {
+                serverInfo.documentsCollection = {
+                  exists: false,
+                  error: 'Collection not found - use "ensure_collection" tool to create it'
+                };
               }
             }
           } catch (error) {
             connectionStatus = `❌ Connection failed: ${error.message}`;
+            errorDetails = `\n**Error Details:** ${error.message}`;
+            
+            if (error.message.includes('credentials not configured')) {
+              errorDetails += '\n**Solution:** Use the "authenticate" tool to set up your credentials.';
+            } else if (error.message.includes('Invalid credentials')) {
+              errorDetails += '\n**Solution:** Check your email and password, then use the "authenticate" tool.';
+            } else if (error.message.includes('Cannot connect')) {
+              errorDetails += '\n**Solution:** Verify PocketBase server URL and ensure it\'s running.';
+            }
           }
         }
+        
+        // Build status report
+        let statusReport = `🔌 **PocketBase Connection Status**\n\n` +
+                          `**Configuration:**\n` +
+                          `- Server URL: ${pocketbaseUrl}\n` +
+                          `- Admin Email: ${pocketbaseEmail}\n` +
+                          `- Password: ${process.env.POCKETBASE_PASSWORD ? '✅ Configured' : '❌ Not configured'}\n` +
+                          `- Default Collection: ${collection}\n\n` +
+                          `**Connection Status:** ${connectionStatus}`;
+        
+        if (errorDetails) {
+          statusReport += errorDetails;
+        }
+        
+        if (authInfo.email) {
+          statusReport += `\n\n**Authentication Details:**\n` +
+                         `- Email: ${authInfo.email}\n` +
+                         `- Admin ID: ${authInfo.id}\n` +
+                         `- Account Created: ${authInfo.created}\n` +
+                         `- Avatar: ${authInfo.avatar}\n` +
+                         `- Token Valid: ${authInfo.tokenValid}\n` +
+                         `- Account Type: ${authInfo.recordType}`;
+        }
+        
+        if (serverInfo.totalCollections) {
+          statusReport += `\n\n**Server Statistics:**\n` +
+                         `- Server Health: ${serverInfo.health}\n` +
+                         `- Total Collections: ${serverInfo.totalCollections}\n` +
+                         `- Sample Collections: ${serverInfo.sampleCollections?.join(', ') || 'None'}`;
+          
+          if (serverInfo.documentsCollection) {
+            const docCol = serverInfo.documentsCollection;
+            statusReport += `\n\n**Documents Collection:**\n` +
+                           `- Exists: ${docCol.exists ? 'Yes' : 'No'}`;
+            if (docCol.exists) {
+              statusReport += `\n- Collection ID: ${docCol.id}\n` +
+                             `- Created: ${docCol.created}\n` +
+                             `- Schema Fields: ${docCol.fieldsCount}`;
+            } else {
+              statusReport += `\n- Status: ${docCol.error}`;
+            }
+          }
+        }
+        
+        if (serverInfo.error) {
+          statusReport += `\n\n**Server Info:** ${serverInfo.error}`;
+        }
+        
+        statusReport += `\n\n**Available Tools:**\n` +
+                       `- \`authenticate\`: Test/update PocketBase credentials\n` +
+                       `- \`ensure_collection\`: Create documents collection if needed\n` +
+                       `- \`collection_info\`: Get detailed collection statistics\n` +
+                       `- \`extract_document\`: Extract and store documents from URLs\n` +
+                       `- \`list_documents\`: List stored documents with pagination\n` +
+                       `- \`search_documents\`: Search document content\n` +
+                       `- \`get_document\`: Retrieve specific document by ID\n` +
+                       `- \`delete_document\`: Remove a document from storage`;
         
         return {
           content: [
             {
               type: 'text',
-              text: `🔌 **PocketBase Connection Status**\n\n` +
-                    `**Configuration:**\n` +
-                    `- Server URL: ${pocketbaseUrl}\n` +
-                    `- Admin Email: ${pocketbaseEmail}\n` +
-                    `- Password: ${process.env.POCKETBASE_PASSWORD ? '✅ Configured' : '❌ Not configured'}\n` +
-                    `- Default Collection: ${collection}\n\n` +
-                    `**Connection Status:** ${connectionStatus}\n\n` +
-                    (authInfo.email ? 
-                      `**Authentication Details:**\n` +
-                      `- Email: ${authInfo.email}\n` +
-                      `- Admin ID: ${authInfo.id}\n` +
-                      `- Account Created: ${authInfo.created}\n` +
-                      `- Avatar: ${authInfo.avatar}\n\n`
-                      : '') +
-                    (serverInfo.totalCollections ? 
-                      `**Server Statistics:**\n` +
-                      `- Total Collections: ${serverInfo.totalCollections}\n` +
-                      `- Sample Collections: ${serverInfo.sampleCollections?.join(', ') || 'None'}\n\n`
-                      : '') +
-                    (serverInfo.error ? `**Server Info:** ${serverInfo.error}\n\n` : '') +
-                    `**Tips:**\n` +
-                    `- Use the 'authenticate' tool to test/update credentials\n` +
-                    `- Use 'ensure_collection' to create the documents collection if needed\n` +
-                    `- Use 'collection_info' to get detailed collection statistics`
+              text: statusReport
             }
           ]
         };
@@ -1079,7 +1216,11 @@ export function createServer() {
           content: [
             {
               type: 'text',
-              text: `❌ Error checking connection status: ${error.message}`
+              text: `❌ Error checking connection status: ${error.message}\n\n` +
+                    `**Troubleshooting:**\n` +
+                    `- Use the 'authenticate' tool to set up your PocketBase credentials\n` +
+                    `- Verify your PocketBase server is running and accessible\n` +
+                    `- Check the server URL format (include http:// or https://)`
             }
           ],
           isError: true

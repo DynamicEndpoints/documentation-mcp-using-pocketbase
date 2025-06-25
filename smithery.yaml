@@ -32,7 +32,7 @@ startCommand:
     defaultCollection: "documents"
 
 # Server metadata
-description: "MCP server for extracting and managing documents using PocketBase backend"
+description: "MCP server for extracting and managing documents using PocketBase backend. Features lazy loading for optimal Smithery deployment, built-in authentication tool, and comprehensive document management capabilities."
 author: "DynamicEndpoints"
 version: "1.0.0"
 homepage: "https://github.com/DynamicEndpoints/documentation-mcp-using-pocketbase"
@@ -47,3 +47,6 @@ tags:
   - "mcp"
   - "documents"
   - "web-scraping"
+  - "authentication"
+  - "database"
+  - "content-management"
