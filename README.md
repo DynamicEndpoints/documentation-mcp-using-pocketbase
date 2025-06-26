@@ -57,20 +57,64 @@ npm install
 
 ### 2. PocketBase Setup
 
-1. **Start PocketBase server:**
+The MCP server supports **both local and remote PocketBase instances**. Choose the setup that best fits your needs:
+
+#### Option A: Local PocketBase Instance
+
+1. **Download and install PocketBase:**
    ```powershell
-   # Download PocketBase from https://pocketbase.io/docs/
-   .\pocketbase.exe serve
+   # Download from https://pocketbase.io/docs/
+   # Extract the executable to your preferred directory
    ```
 
-2. **Collection Management (Automatic):**
+2. **Start local PocketBase server:**
+   ```powershell
+   # Run from the directory containing pocketbase.exe
+   .\pocketbase.exe serve
+   
+   # Or specify custom port and data directory
+   .\pocketbase.exe serve --http="127.0.0.1:8090" --dir="./pb_data"
+   ```
+
+3. **Set up admin account:**
+   - Access PocketBase Admin UI at http://127.0.0.1:8090/_/
+   - Create your admin account
+   - Note the email/password for configuration
+
+#### Option B: Remote PocketBase Instance
+
+1. **Deploy PocketBase to your preferred hosting:**
+   - Railway, Fly.io, DigitalOcean, AWS, etc.
+   - Follow your hosting provider's deployment guide
+   - Ensure HTTPS is enabled for production
+
+2. **Configure your remote instance:**
+   - Set up admin account through the web interface
+   - Configure CORS settings if needed
+   - Note the full URL (e.g., https://your-pb-instance.com)
+
+#### Option C: Docker PocketBase
+
+1. **Using Docker Compose:**
+   ```yaml
+   version: '3.8'
+   services:
+     pocketbase:
+       image: ghcr.io/muchobien/pocketbase:latest
+       ports:
+         - "8090:8090"
+       volumes:
+         - ./pb_data:/pb/pb_data
+   ```
+
+2. **Collection Management (Automatic for all setups):**
    - The server will automatically create the required `documents` collection on startup
    - If `AUTO_CREATE_COLLECTION=true` (default), no manual setup needed
    - Use the `ensure_collection` tool to manually verify/create collections
    - Use the `collection_info` tool to check collection status
 
 3. **Manual Collection Setup (if needed):**
-   - Access PocketBase Admin UI (usually http://127.0.0.1:8090/_/)
+   - Access PocketBase Admin UI
    - Create a new collection named `documents`
    - Add these fields:
      ```
@@ -83,10 +127,11 @@ npm install
 
 ### 3. Environment Configuration
 
-Create a `.env` file in the project root:
+Create a `.env` file in the project root. The server supports both **local** and **remote** PocketBase instances:
 
+#### For Local PocketBase Instance:
 ```env
-# PocketBase Configuration
+# PocketBase Configuration - Local
 POCKETBASE_URL=http://127.0.0.1:8090
 POCKETBASE_ADMIN_EMAIL=admin@example.com
 POCKETBASE_ADMIN_PASSWORD=your-secure-password
@@ -99,11 +144,57 @@ TRANSPORT_MODE=stdio
 HTTP_PORT=3000
 
 # Development Settings
+DEBUG=true
+NODE_ENV=development
+READ_ONLY_MODE=false
+
+# Collection Management ✨ New!
+AUTO_CREATE_COLLECTION=true
+```
+
+#### For Remote PocketBase Instance:
+```env
+# PocketBase Configuration - Remote
+POCKETBASE_URL=https://your-pocketbase-instance.com
+POCKETBASE_ADMIN_EMAIL=admin@yourdomain.com
+POCKETBASE_ADMIN_PASSWORD=your-secure-password
+
+# Collection Settings
+DOCUMENTS_COLLECTION=documents
+
+# Transport Configuration
+TRANSPORT_MODE=stdio
+HTTP_PORT=3000
+
+# Production Settings
 DEBUG=false
 NODE_ENV=production
 READ_ONLY_MODE=false
 
-# Collection Management ✨ New!
+# Collection Management
+AUTO_CREATE_COLLECTION=true
+```
+
+#### For Dockerized PocketBase:
+```env
+# PocketBase Configuration - Docker
+POCKETBASE_URL=http://pocketbase:8090
+POCKETBASE_ADMIN_EMAIL=admin@localhost
+POCKETBASE_ADMIN_PASSWORD=admin123
+
+# Collection Settings
+DOCUMENTS_COLLECTION=documents
+
+# Transport Configuration
+TRANSPORT_MODE=stdio
+HTTP_PORT=3000
+
+# Container Settings
+DEBUG=false
+NODE_ENV=production
+READ_ONLY_MODE=false
+
+# Collection Management
 AUTO_CREATE_COLLECTION=true
 ```
 

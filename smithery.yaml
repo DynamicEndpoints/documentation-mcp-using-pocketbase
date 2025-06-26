@@ -11,8 +11,9 @@ startCommand:
     properties:
       pocketbaseUrl:
         type: "string"
-        description: "PocketBase server URL (e.g., https://your-pb-instance.com)"
+        description: "PocketBase server URL - supports both local (http://127.0.0.1:8090) and remote (https://your-pb-instance.com) instances"
         default: "http://127.0.0.1:8090"
+        format: "uri"
       pocketbaseEmail:
         type: "string"
         description: "PocketBase admin email for authentication"
@@ -44,12 +45,30 @@ startCommand:
     DEBUG: "debugMode"
     AUTO_CREATE_COLLECTION: "autoCreateCollection"
   exampleConfig:
+    # Example for remote PocketBase instance
     pocketbaseUrl: "https://your-pocketbase-instance.com"
     pocketbaseEmail: "admin@yourdomain.com"
     pocketbasePassword: "your-secure-password"
     defaultCollection: "documents"
     autoCreateCollection: true
     debugMode: false
+  alternativeConfigs:
+    local:
+      # Example for local PocketBase instance
+      pocketbaseUrl: "http://127.0.0.1:8090"
+      pocketbaseEmail: "test@example.com"
+      pocketbasePassword: "123456"
+      defaultCollection: "documents"
+      autoCreateCollection: true
+      debugMode: true
+    docker:
+      # Example for dockerized PocketBase
+      pocketbaseUrl: "http://pocketbase:8090"
+      pocketbaseEmail: "admin@localhost"
+      pocketbasePassword: "admin123"
+      defaultCollection: "documents"
+      autoCreateCollection: true
+      debugMode: false
 
 # Server metadata
 description: "MCP server for extracting and managing documents using PocketBase backend"
