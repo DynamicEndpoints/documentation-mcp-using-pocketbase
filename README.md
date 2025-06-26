@@ -1,5 +1,7 @@
 # Document Extractor MCP Server
 
+[![smithery badge](https://smithery.ai/badge/@DynamicEndpoints/documentation-mcp-using-pocketbase)](https://smithery.ai/server/@DynamicEndpoints/documentation-mcp-using-pocketbase)
+
 A Model Context Protocol (MCP) server that extracts document content from Microsoft Learn and GitHub URLs, storing them in PocketBase for easy retrieval and search.
 
 ## Features
@@ -44,6 +46,14 @@ A Model Context Protocol (MCP) server that extracts document content from Micros
 - Network access for content extraction
 
 ## Installation
+
+### Installing via Smithery
+
+To install Document Extractor for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@DynamicEndpoints/documentation-mcp-using-pocketbase):
+
+```bash
+npx -y @smithery/cli install @DynamicEndpoints/documentation-mcp-using-pocketbase --client claude
+```
 
 ### 1. Install Dependencies
 
