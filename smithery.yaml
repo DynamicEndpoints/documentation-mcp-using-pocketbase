@@ -66,9 +66,7 @@ tools:
     description: A tool for managing documents in a PocketBase collection. It can add, retrieve, list, and delete documents.
     type: mcp
     mcp:
-      # This configuration uses the stdio transport, which is simple and efficient
-      # for running the tool as a local process.
-      transport: stdio
+      transport: http
 
       # The command to start your MCP server.
       # This assumes your Node.js entrypoint is 'server.js'. Update if necessary.
