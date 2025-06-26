@@ -36,6 +36,13 @@ startCommand:
         default: false
     required: ["pocketbaseUrl", "pocketbaseEmail", "pocketbasePassword"]
     additionalProperties: false
+  configToEnv:
+    POCKETBASE_URL: "pocketbaseUrl"
+    POCKETBASE_EMAIL: "pocketbaseEmail"
+    POCKETBASE_PASSWORD: "pocketbasePassword"
+    DOCUMENTS_COLLECTION: "defaultCollection"
+    DEBUG: "debugMode"
+    AUTO_CREATE_COLLECTION: "autoCreateCollection"
   exampleConfig:
     pocketbaseUrl: "https://your-pocketbase-instance.com"
     pocketbaseEmail: "admin@yourdomain.com"
