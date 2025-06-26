@@ -1,37 +1,21 @@
-# Dockerfile for Smithery Container Deployment
-FROM node:18-alpine
+# Use an official Node.js runtime as a parent image.
+# Using a specific version like '20-slim' is recommended for reproducibility and smaller image size.
+FROM node:20-slim
 
-# Add curl for health checks
-RUN apk add --no-cache curl
+# Set the working directory inside the container
+WORKDIR /usr/src/app
 
-WORKDIR /app
-
-# Copy package files and install dependencies
+# Copy package.json and package-lock.json (or yarn.lock).
+# This step is cached, so 'npm install' only runs when these files change.
 COPY package*.json ./
-RUN npm ci --only=production --silent
 
-# Copy application files
-COPY src/ ./src/
-COPY README.md ./
+# Install app dependencies for production.
+RUN npm install --omit=dev
 
-# Create non-root user for security
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S mcp -u 1001 -G nodejs
+# Copy the rest of the application's source code into the container.
+COPY . .
 
-# Set proper permissions
-RUN chown -R mcp:nodejs /app
-USER mcp
-
-# Set environment for HTTP mode (required for Smithery)
-ENV TRANSPORT_MODE=http
-ENV NODE_ENV=production
-
-# Smithery will set the PORT environment variable
-EXPOSE 3000
-
-# Health check using curl
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-  CMD curl -f http://localhost:${PORT:-3000}/health || exit 1
-
-# Start the server
-CMD ["npm", "start"]
+# Define the command to run your app.
+# This will be the entry point for your container when it starts.
+# Update 'server.js' if your entrypoint file is named differently.
+CMD [ "node", "server.js" ]

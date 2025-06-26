@@ -1,4 +1,4 @@
-# Smithery Deployment Configuration
+version: v1alpha
 runtime: "container"
 build:
   dockerfile: "Dockerfile"
@@ -11,28 +11,41 @@ startCommand:
     properties:
       pocketbaseUrl:
         type: "string"
-        description: "PocketBase server URL"
-        default: "https://your-pocketbase.com"
+        description: "PocketBase server URL (e.g., https://your-pb-instance.com)"
+        default: "http://127.0.0.1:8090"
       pocketbaseEmail:
         type: "string"
-        description: "PocketBase admin email"
+        description: "PocketBase admin email for authentication"
+        format: "email"
       pocketbasePassword:
         type: "string"
         description: "PocketBase admin password"
         format: "password"
       defaultCollection:
-        type: "string"
-        description: "Collection name for documents"
+        type: "string" 
+        description: "Default collection name for storing documents"
         default: "documents"
+        pattern: "^[a-zA-Z0-9_]+$"
+      autoCreateCollection:
+        type: "boolean"
+        description: "Automatically create collection if it doesn't exist"
+        default: true
+      debugMode:
+        type: "boolean"
+        description: "Enable debug logging"
+        default: false
     required: ["pocketbaseUrl", "pocketbaseEmail", "pocketbasePassword"]
+    additionalProperties: false
   exampleConfig:
     pocketbaseUrl: "https://your-pocketbase-instance.com"
-    pocketbaseEmail: "admin@example.com"
+    pocketbaseEmail: "admin@yourdomain.com"
     pocketbasePassword: "your-secure-password"
     defaultCollection: "documents"
+    autoCreateCollection: true
+    debugMode: false
 
 # Server metadata
-description: "MCP server for extracting and managing documents using PocketBase backend. Features lazy loading for optimal Smithery deployment, built-in authentication tool, and comprehensive document management capabilities."
+description: "MCP server for extracting and managing documents using PocketBase backend"
 author: "DynamicEndpoints"
 version: "1.0.0"
 homepage: "https://github.com/DynamicEndpoints/documentation-mcp-using-pocketbase"
@@ -47,6 +60,30 @@ tags:
   - "mcp"
   - "documents"
   - "web-scraping"
-  - "authentication"
-  - "database"
-  - "content-management"
+
+tools:
+  - name: document-extractor-mcp
+    description: A tool for managing documents in a PocketBase collection. It can add, retrieve, list, and delete documents.
+    type: mcp
+    mcp:
+      # This configuration uses the stdio transport, which is simple and efficient
+      # for running the tool as a local process.
+      transport: stdio
+
+      # The command to start your MCP server.
+      # This assumes your Node.js entrypoint is 'server.js'. Update if necessary.
+      command: ["node", "server.js"]
+      workingDir: .
+
+      # Environment variables are passed to your tool's process.
+      # This is the recommended way to provide configuration and secrets.
+      # Smithery will substitute ${VAR} with values from its own environment.
+      env:
+        - POCKETBASE_URL=${POCKETBASE_URL}
+        - POCKETBASE_EMAIL=${POCKETBASE_EMAIL}
+        - POCKETBASE_PASSWORD=${POCKETBASE_PASSWORD}
+        - DOCUMENTS_COLLECTION=${DOCUMENTS_COLLECTION:-documents}
+        - READ_ONLY_MODE=${READ_ONLY_MODE:-false}
+        - DEBUG=${DEBUG:-false}
+        # Ensure the server starts in the mode Smithery expects.
+        - TRANSPORT_MODE=stdio
