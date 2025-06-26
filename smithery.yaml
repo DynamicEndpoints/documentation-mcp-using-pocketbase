@@ -67,21 +67,3 @@ tools:
     type: mcp
     mcp:
       transport: http
-
-      # The command to start your MCP server.
-      # This assumes your Node.js entrypoint is 'server.js'. Update if necessary.
-      command: ["node", "server.js"]
-      workingDir: .
-
-      # Environment variables are passed to your tool's process.
-      # This is the recommended way to provide configuration and secrets.
-      # Smithery will substitute ${VAR} with values from its own environment.
-      env:
-        - POCKETBASE_URL=${POCKETBASE_URL}
-        - POCKETBASE_EMAIL=${POCKETBASE_EMAIL}
-        - POCKETBASE_PASSWORD=${POCKETBASE_PASSWORD}
-        - DOCUMENTS_COLLECTION=${DOCUMENTS_COLLECTION:-documents}
-        - READ_ONLY_MODE=${READ_ONLY_MODE:-false}
-        - DEBUG=${DEBUG:-false}
-        # Ensure the server starts in the mode Smithery expects.
-        - TRANSPORT_MODE=stdio
